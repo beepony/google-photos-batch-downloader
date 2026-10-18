@@ -27,8 +27,16 @@ function makeChrome() {
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, openPopup: async () => {} },
     power: { requestKeepAwake() { fake.awake = true; }, releaseKeepAwake() { fake.awake = false; } },
     notifications: { create: (id, opts) => (fake.lastNotice = opts) },
-    tabsList: [],
+    // One open Takeout tab whose content script "clicks" the part button, which starts a download.
+    tabsList: [{ id: 1, windowId: 1, url: `https://takeout.google.com/manage/archive/${JOB}` }],
     tabs: {
+      reload: async () => {},
+      sendMessage: async (_id, msg) => {
+        if (msg.type !== 'clickPart') return { ok: false };
+        fake.clicks = (fake.clicks || 0) + 1;
+        setTimeout(() => fake.downloads.download({ url: msg.url }), 0);
+        return { ok: true };
+      },
       create: async (o) => { fake.openedTab = o.url; fake.tabsCreated = (fake.tabsCreated || 0) + 1; },
       query: async () => fake.tabsList,
       update: async (id) => (fake.focusedTab = id),
@@ -185,7 +193,7 @@ test('HTML re-auth response pauses job and resumes after new rapt', async () => 
   await settle();
   let job = (await send({ type: 'getState' })).data.jobs[0];
   assert.equal(job.status, 'needs_auth');
-  assert.match(fake.openedTab, /manage\/archive/);
+  assert.equal(fake.focusedTab, 1, 'focuses the open Takeout tab');
   assert.equal(job.parts.filter((p) => p.status === 'done').length, 0);
 
   fake.behavior = () => ({ mime: 'application/zip' });
@@ -355,4 +363,26 @@ test('parts finished earlier and then moved to another folder still count as don
   });
   const r = await send(scanMsg(2));
   assert.equal(r.data.summary.done, 1);
+});
+
+test('parts are started by clicking on the Takeout page, one at a time', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(3));
+  await send({ type: 'settings', settings: { concurrency: 3 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  assert.equal(fake.clicks, 3, 'each started part is a page click');
+  assert.equal(fake.downloads.direct || 0, 0);
+});
+
+test('no Takeout tab open: asks for the page instead of downloading directly', async () => {
+  const { fake, send } = await boot();
+  fake.tabsList = [];
+  await send(scanMsg(2));
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  assert.equal(fake.items.size, 0);
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.notice.k, 'n_needPage');
+  assert.match(fake.openedTab, /manage\/archive/);
 });

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-10-18
+
+- Fix (root cause of the endless "verify your identity" prompt): Google only serves archives to requests that
+  come from its own Takeout page. Downloads started by the extension via `chrome.downloads.download` were sent
+  to `accounts.google.com/ServiceLogin` even with a valid, freshly verified session.
+  Parts are now started by clicking Takeout's own download button inside the open Takeout tab (one click at a
+  time; the next part starts as soon as the previous click turns into a download).
+- Keep one Takeout export page open while downloading; the extension tells you if it is missing.
+- If a click lands on Google's sign-in page, the job waits for verification on that same tab.
+
 ## 0.2.2 — 2026-10-18
 
 - Fix: when the Takeout tab was opened without `?rapt=` in its address (e.g. from the Takeout menu), the

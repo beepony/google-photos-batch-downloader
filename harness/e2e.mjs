@@ -115,7 +115,7 @@ try {
   let authSeen = false;
   const t0 = Date.now();
   let st;
-  while (Date.now() - t0 < 300_000) {
+  while (Date.now() - t0 < Number(process.env.E2E_MS || 300_000)) {
     await sleep(1000);
     st = await evalPopup(`new Promise(r => chrome.runtime.sendMessage({type:'getState'}, x => r(x.data)))`);
     const job = st.jobs[0];
@@ -133,7 +133,7 @@ try {
       mock.state.requireAuthFor.clear();
       mock.state.raptOk = 'R2';
       // Re-verification lands the user back on the manage page with a new rapt.
-      const tabs = (await cdp.send('Target.getTargets')).targetInfos.filter((t) => t.type === 'page' && t.url.includes('/manage/archive/'));
+      const tabs = (await cdp.send('Target.getTargets')).targetInfos.filter((t) => t.type === 'page' && /takeout\.google\.com\/(manage|ServiceLogin)/.test(t.url));
       for (const t of tabs) {
         const s2 = (await cdp.send('Target.attachToTarget', { targetId: t.targetId, flatten: true })).sessionId;
         await cdp.send('Page.navigate', { url: `https://takeout.google.com/manage/archive/${JOB}` }, s2);
@@ -169,7 +169,7 @@ try {
   const zips = files.filter((f) => /^takeout-.*\.zip$/.test(f));
   const dupes = zips.filter((f) => / \(\d+\)\.zip$/.test(f));
   const job = st.jobs[0];
-  log(`authSeen=${authSeen} rangeResumes=${mock.state.rangeHits} zips=${zips.length} dupes=${dupes.length} hitsPerPart=${JSON.stringify(mock.state.hits.reduce((a, h) => ((a[h.part] = (a[h.part] || 0) + 1), a), {}))} legacyHits=${mock.state.legacyHits}`);
+  log(`authSeen=${authSeen} rangeResumes=${mock.state.rangeHits} zips=${zips.length} dupes=${dupes.length} hitsPerPart=${JSON.stringify(mock.state.hits.reduce((a, h) => ((a[h.part] = (a[h.part] || 0) + 1), a), {}))} legacyHits=${mock.state.legacyHits} noCookie=${mock.state.noCookie}`);
   ok = job.status === 'done' && zips.length === PARTS && dupes.length === 0 && /ALL GOOD/.test(verifyOut) && authSeen && mock.state.legacyHits === 0 && job.totalParts === PARTS;
   log(ok ? 'E2E PASS' : 'E2E FAIL');
 } catch (e) {

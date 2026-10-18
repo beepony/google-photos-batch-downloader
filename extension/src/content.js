@@ -166,6 +166,36 @@
     refresh();
   }
 
+  // The service worker asks us to start a part: click Takeout's own download button so the request
+  // carries the page's context (Google refuses archive requests that start outside its page).
+  function findPartAnchor(part) {
+    const re = new RegExp(`(?:第\\s*${part}\\s*(?:个)?部分|part\\s*${part}(?!\\d))`, 'i');
+    for (const a of document.querySelectorAll('a[href]')) {
+      if (!PART_RE.test(a.href)) continue;
+      const label = a.getAttribute('aria-label') || a.textContent || '';
+      if (re.test(label)) return a;
+      try {
+        const u = new URL(a.href);
+        if (Number(u.searchParams.get('i')) === part - 1 && /第\s*\d+|part\s*\d+/i.test(label)) return a;
+      } catch {
+        /* ignore */
+      }
+    }
+    return null;
+  }
+
+  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+    if (msg?.type !== 'clickPart') return false;
+    const a = findPartAnchor(msg.part);
+    if (!a || (msg.jobId && !a.href.includes(msg.jobId))) {
+      sendResponse({ ok: false, reason: 'notfound' });
+      return false;
+    }
+    a.click();
+    sendResponse({ ok: true });
+    return false;
+  });
+
   const timer = setInterval(() => {
     if (bar) refresh();
   }, 2000);

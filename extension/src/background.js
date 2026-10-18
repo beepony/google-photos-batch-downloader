@@ -145,7 +145,9 @@ async function upsertFromScan(scan) {
   }
   await adoptHistory(job);
   const raptNow = job.rapt || '';
-  if (job.status === 'needs_auth' && raptNow && raptNow !== raptBefore) {
+  void raptNow;
+  void raptBefore;
+  if (job.status === 'needs_auth') {
     job.status = 'running';
     job.notice = M('n_reauthDetected');
     job.resumedAt = Date.now();
@@ -197,20 +199,62 @@ function markDone(job, p, item, countSession = true) {
   if (countSession) job.sessionBytes = (job.sessionBytes || 0) + p.fileSize;
 }
 
+const START_TIMEOUT_MS = 60_000;
+const LEFT_PAGE_MS = 4_000;
+
+// Google only serves archives to requests made by its own Takeout page; a download started by the
+// extension (chrome.downloads.download) is bounced to ServiceLogin even with a valid session.
+// So every part is started by clicking its download button inside an open Takeout tab.
+async function takeoutTabs(job) {
+  let tabs = [];
+  try {
+    tabs = await chrome.tabs.query({ url: 'https://takeout.google.com/*' });
+  } catch {
+    tabs = [];
+  }
+  const mine = tabs.filter((x) => String(x.url || '').includes(job.jobId));
+  return mine.length ? mine : tabs.filter((x) => /\/manage\b/.test(String(x.url || '')));
+}
+
+async function clickOnPage(job, p) {
+  const tabs = await takeoutTabs(job);
+  for (const tab of tabs) {
+    try {
+      const res = await chrome.tabs.sendMessage(tab.id, { type: 'clickPart', jobId: job.jobId, part: p.part, url: p.url });
+      if (res?.ok) {
+        p.tabId = tab.id;
+        return 'ok';
+      }
+    } catch {
+      // No content script in this tab (opened before the extension was reloaded): reload it once.
+      if (!job.reloadedTabAt || Date.now() - job.reloadedTabAt > 60_000) {
+        job.reloadedTabAt = Date.now();
+        chrome.tabs.reload(tab.id).catch(() => {});
+      }
+      return 'reloading';
+    }
+  }
+  return tabs.length ? 'notfound' : 'nopage';
+}
+
 async function startPart(job, p) {
   p.status = 'starting';
   p.attempts = (p.attempts || 0) + 1;
   p.error = '';
+  p.downloadId = null;
   p.lastProgressAt = Date.now();
   await save();
-  try {
-    const id = await chrome.downloads.download({ url: p.url, conflictAction: 'overwrite', saveAs: false });
-    state.dl[id] = { jobId: job.jobId, part: p.part };
-    p.downloadId = id;
-    p.status = 'downloading';
-  } catch (e) {
-    scheduleRetry(job, p, M('e_start', { m: String(e.message || e) }));
+  const r = await clickOnPage(job, p);
+  if (r === 'ok') return true;
+  // Not started: put it back without spending an attempt.
+  p.status = 'pending';
+  p.attempts = Math.max(0, p.attempts - 1);
+  if (r === 'nopage' && (!job.openedPageAt || Date.now() - job.openedPageAt > 120_000)) {
+    job.openedPageAt = Date.now();
+    await chrome.tabs.create({ url: job.pageUrl, active: false }).catch(() => {});
   }
+  job.notice = M(r === 'nopage' ? 'n_needPage' : 'n_pageLoading');
+  return false;
 }
 
 function scheduleRetry(job, p, error, resumeId = null) {
@@ -240,11 +284,11 @@ function requireAuth(job, reason) {
   job.status = 'needs_auth';
   job.notice = reason;
   notify(`auth-${job.jobId}`, 'nt_authTitle', 'nt_authBody');
-  void focusTakeoutTab(job);
+  void focusTakeoutTab(job, true);
 }
 
 // Reuse an open Takeout tab instead of opening a new one on every auth request.
-async function focusTakeoutTab(job) {
+async function focusTakeoutTab(job, allowCreate = false) {
   try {
     const tabs = await chrome.tabs.query({ url: 'https://takeout.google.com/*' });
     const tab = tabs.find((x) => String(x.url || '').includes(job.jobId)) || tabs[0];
@@ -273,6 +317,21 @@ async function tick() {
       job.notice = M('n_expired');
     }
     for (const p of Object.values(job.parts)) {
+      if (p.status === 'starting' && !p.downloadId) {
+        const waited = now - (p.lastProgressAt || now);
+        // The Takeout tab navigated away from Takeout (Google's sign-in page) instead of downloading.
+        if (waited > LEFT_PAGE_MS && job.status === 'running') {
+          const tabs = await takeoutTabs(job);
+          if (!tabs.some((x) => x.id === p.tabId)) {
+            p.status = 'pending';
+            p.attempts = Math.max(0, (p.attempts || 1) - 1);
+            requireAuth(job, M('n_auth'));
+            continue;
+          }
+        }
+        if (waited > START_TIMEOUT_MS) scheduleRetry(job, p, M('e_noStart'));
+        continue;
+      }
       if (!ACTIVE.has(p.status) || !p.downloadId) continue;
       const item = byId.get(p.downloadId);
       if (!item) continue;
@@ -315,7 +374,9 @@ async function tick() {
         p.resumeId = null;
       }
     }
-    const next = planNext(job, settings, now);
+    // Start parts one at a time: a new click is only made after the previous one became a download.
+    const waiting = Object.values(job.parts).some((p) => p.status === 'starting' && !p.downloadId);
+    const next = waiting ? [] : planNext(job, settings, now).slice(0, 1);
     if (!next.length && !s.active && settings.dataBudgetGB && s.pending) {
       job.status = 'paused';
       job.notice = M('n_budget', { gb: settings.dataBudgetGB });
@@ -405,18 +466,31 @@ function routeFilename(item, suggest) {
   return undefined;
 }
 
+function bindStarting(item) {
+  // Page clicks may surface as a download of the archive page URL; tie it to the part we just clicked.
+  for (const job of Object.values(state.jobs)) {
+    if (![item.url, item.finalUrl, item.referrer].some((u) => String(u || '').includes(job.jobId))) continue;
+    const p = Object.values(job.parts).find((x) => x.status === 'starting' && !x.downloadId);
+    if (p) return { job, info: { part: p.part } };
+  }
+  return null;
+}
+
 async function onCreated(item) {
   await load();
   if (authCancelled.has(item.id) || state.dl[item.id] || state.aux[item.id]) return;
-  const hit = jobForItem(item);
+  const hit = jobForItem(item) || bindStarting(item);
   if (!hit?.job) return;
   // A part link clicked on the page: track it instead of downloading it again.
   const p = hit.job.parts[hit.info.part] || (hit.job.parts[hit.info.part] = newPart({ part: hit.info.part, url: item.url }));
+  const wasStarting = p.status === 'starting';
   state.dl[item.id] = { jobId: hit.job.jobId, part: p.part };
   p.status = 'downloading';
   p.downloadId = item.id;
   p.lastProgressAt = Date.now();
   await save();
+  // The previous click turned into a download: start the next part right away.
+  if (wasStarting && hit.job.status === 'running') await tick();
 }
 
 async function onChanged(delta) {
@@ -437,7 +511,7 @@ async function onChanged(delta) {
   if (!ref && (delta.finalUrl || delta.filename || delta.state)) {
     // Page-clicked parts only reveal their job once redirected to the usercontent host.
     const [item] = await chrome.downloads.search({ id: delta.id });
-    const hit = item && jobForItem(item);
+    const hit = item && (jobForItem(item) || bindStarting(item));
     const n = hit?.job && (hit.info.part || partFromFilename(item.filename)?.part);
     const p = n && (hit.job.parts[n] || (hit.job.parts[n] = newPart({ part: n, url: '' })));
     if (!p || p.status === 'done') return;

@@ -25,18 +25,29 @@ export async function startMock({ parts = 8, port = 8443, partBytes = 3 * 1024 *
     execFileSync('zip', ['-q', '-0', z, `photo-${i}.bin`], { cwd: dir });
     zips.push(readFileSync(z));
   }
-  const state = { requireAuthFor: new Set(), dropOnce: new Set(), raptOk: 'R1', hits: [], rangeHits: 0, legacyHits: 0 };
+  const state = { requireAuthFor: new Set(), dropOnce: new Set(), raptOk: 'R1', hits: [], rangeHits: 0, legacyHits: 0, strictCookie: true, noCookie: 0, authHits: 0 };
   const stamp = '20261018T062654Z';
   const page = (rapt) => `<!doctype html><html><head><meta charset="utf-8"><title>Google 导出</title></head><body>
 <h2>备份数据并提供下载链接</h2><p>您请求导出的数据总大小为 ${(parts * partBytes / 1024 ** 2).toFixed(0)}MB。这些文件将于 2026年10月25日 14:50 过期。</p>
 <div id="list">${Array.from({ length: parts }, (_, k) => `<div class="row"><div>第 ${k + 1} 部分 ${(partBytes / 1024 ** 2).toFixed(2)}MB</div>
-<div><a aria-label="下载第 ${k + 1} 部分（共 ${parts} 部分）" href="/takeout/download?j=${JOB}&i=${k}&user=110&rapt=${rapt}">下载</a></div></div>`).join('\n')}</div>
+<div><a jsname="hSRGPd" aria-label="下载第 ${k + 1} 部分（共 ${parts} 部分）" href="/takeout/download?j=${JOB}&i=${k}&user=110&rapt=${rapt}">下载</a></div></div>`).join('\n')}</div>
 <div><a aria-label="查看报告" href="/takeout/download?j=${JOB}&i=${parts}&user=110&rapt=${rapt}">查看报告</a></div>
+<script>
+// Like Takeout's own JS: a click on a part button navigates to the settings download URL.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[jsname="hSRGPd"]');
+  if (!a) return;
+  e.preventDefault();
+  const u = new URL(a.href);
+  location.href = '/settings/takeout/download?i=' + u.searchParams.get('i') + '&j=' + u.searchParams.get('j') + '&download=true&rapt=' + u.searchParams.get('rapt');
+});
+</script>
 </body></html>`;
   const server = https.createServer({ key: readFileSync(join(dir, 'k.pem')), cert: readFileSync(join(dir, 'c.pem')) }, (req, res) => {
     const url = new URL(req.url, 'https://takeout.google.com');
     if (url.pathname.startsWith('/manage/archive/')) {
-      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      // Like Google's strict session cookies: only sent on same-site requests, not on extension-initiated ones.
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'set-cookie': 'SSID=ok; Path=/; Secure; SameSite=Strict' });
       return res.end(page(url.searchParams.get('rapt') || state.raptOk));
     }
     // Like the real site: the anchor href only bounces back to the manage page.
@@ -48,10 +59,20 @@ export async function startMock({ parts = 8, port = 8443, partBytes = 3 * 1024 *
     if (url.pathname === '/settings/takeout/download') {
       const i = Number(url.searchParams.get('i'));
       const rapt = url.searchParams.get('rapt');
+      // Real Takeout sends requests that do not come from its own page (e.g. chrome.downloads from an
+      // extension, Sec-Fetch-Site: none / cross-site) to ServiceLogin, even with a valid session.
+      const site = req.headers['sec-fetch-site'] || 'none';
+      if (state.strictCookie && !/^same-(origin|site)$/.test(site)) {
+        state.noCookie += 1;
+        res.writeHead(302, { location: 'https://takeout.google.com/ServiceLogin?passive=1' });
+        return res.end();
+      }
       if (rapt !== state.raptOk || state.requireAuthFor.has(i + 1) || url.searchParams.get('download') !== 'true') {
         state.hits.push({ part: i + 1, rapt, range: '', auth: true });
-        res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        return res.end('<html><body>请验证您的身份</body></html>');
+        state.authHits += 1;
+        // Real Takeout bounces to accounts.google.com/ServiceLogin; the mock keeps it on this host.
+        res.writeHead(302, { location: '/ServiceLogin?passive=1209600' });
+        return res.end();
       }
       const name = `takeout-${stamp}-1-${String(i + 1).padStart(3, '0')}.zip`;
       res.writeHead(302, { location: `https://takeout-download.usercontent.google.com/download/${name}?j=${JOB}&i=${i}&user=999&authuser=0` });
@@ -85,6 +106,10 @@ export async function startMock({ parts = 8, port = 8443, partBytes = 3 * 1024 *
         setTimeout(step, Number(process.env.MOCK_DELAY || 40));
       };
       return step();
+    }
+    if (url.pathname === '/ServiceLogin') {
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      return res.end('<html><body>sign in</body></html>');
     }
     res.writeHead(404);
     res.end();
