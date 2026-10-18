@@ -32,7 +32,10 @@ export function formatDuration(seconds, lang = 'zh') {
   return t(lang, 'dur_s', { s });
 }
 
-// Takeout part links: /takeout/download?j=<jobId>&i=<zeroBasedIndex>&user=...&rapt=...
+// Takeout part links come in three shapes (all carry j=<jobId>&i=<zeroBasedIndex>):
+//   page anchor:  https://takeout.google.com/takeout/download?j=..&i=..&user=..&rapt=..
+//   real request: https://takeout.google.com/settings/takeout/download?i=..&j=..&download=true&rapt=..
+//   final file:   https://takeout-download.usercontent.google.com/download/takeout-...-001.zip?j=..&i=..
 export function parsePartLink(href, base = 'https://takeout.google.com/') {
   let url;
   try {
@@ -40,12 +43,22 @@ export function parsePartLink(href, base = 'https://takeout.google.com/') {
   } catch {
     return null;
   }
-  if (!/takeout\.google\.com$/.test(url.hostname) || !/\/takeout\/download$/.test(url.pathname)) return null;
+  const host = url.hostname;
+  const ok =
+    (host === 'takeout.google.com' && /^\/(?:settings\/)?takeout\/download$/.test(url.pathname)) ||
+    (host === 'takeout-download.usercontent.google.com' && /^\/download\//.test(url.pathname));
+  if (!ok) return null;
   const jobId = url.searchParams.get('j');
   const raw = url.searchParams.get('i');
   const index = Number(raw);
   if (!jobId || raw === null || raw === '' || !Number.isInteger(index) || index < 0) return null;
   return { jobId, index, part: index + 1, user: url.searchParams.get('user') || '', url: url.toString() };
+}
+
+// Anchor labels of real parts ("下载第 3 部分（共 166 部分）", "Download part 3 of 166").
+// Other anchors with the same href shape (e.g. "查看报告" / "View report") must be ignored.
+export function isPartLabel(label) {
+  return /第\s*\d+\s*(?:个)?部分|part\s*\d+/i.test(String(label || ''));
 }
 
 export function jobIdFromPageUrl(pageUrl) {
@@ -58,11 +71,13 @@ export function jobIdFromPageUrl(pageUrl) {
   }
 }
 
-export function buildPartUrl({ jobId, part, user = '', rapt = '' }) {
-  const url = new URL('https://takeout.google.com/takeout/download');
-  url.searchParams.set('j', jobId);
+// The URL Takeout's own page script navigates to when a part is clicked. The legacy
+// /takeout/download anchor href just redirects back to the manage page (HTML).
+export function buildPartUrl({ jobId, part, rapt = '' }) {
+  const url = new URL('https://takeout.google.com/settings/takeout/download');
   url.searchParams.set('i', String(part - 1));
-  if (user) url.searchParams.set('user', user);
+  url.searchParams.set('j', jobId);
+  url.searchParams.set('download', 'true');
   if (rapt) url.searchParams.set('rapt', rapt);
   return url.toString();
 }
@@ -109,6 +124,7 @@ export function buildJobFromScan({ pageUrl, pageText = '', title = '', records =
   let totalParts = 0;
   for (const r of records) {
     const info = r.href ? parsePartLink(r.href, pageUrl) : null;
+    if (info && r.label && !isPartLabel(r.label)) continue;
     let part = info?.part;
     if (info) {
       if (!jobId) {
@@ -126,7 +142,6 @@ export function buildJobFromScan({ pageUrl, pageText = '', title = '', records =
     const prev = parts.get(part);
     parts.set(part, {
       part,
-      url: info?.url || prev?.url || '',
       sizeBytes: sizeBytes || prev?.sizeBytes || 0,
     });
   }
@@ -145,9 +160,7 @@ export function buildJobFromScan({ pageUrl, pageText = '', title = '', records =
   } catch {
     /* ignore */
   }
-  for (const p of parts.values()) {
-    if (!p.url) p.url = buildPartUrl({ jobId, part: p.part, user, rapt });
-  }
+  for (const p of parts.values()) p.url = buildPartUrl({ jobId, part: p.part, rapt });
   const list = [...parts.values()].sort((a, b) => a.part - b.part);
   if (!list.length) return null;
   totalParts = Math.max(totalParts, list[list.length - 1].part);

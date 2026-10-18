@@ -78,11 +78,18 @@ function baseName(path) {
   return String(path || '').split(/[\\/]/).pop();
 }
 
+const AUTH_LOOP_MS = 2 * 60_000;
+
 function jobForUrl(url) {
   const info = parsePartLink(url || '');
   if (!info) return null;
   const job = state.jobs[info.jobId];
   return job ? { job, info } : { job: null, info };
+}
+
+// Page clicks start at the manage page and redirect to the usercontent host, so check every URL we know.
+function jobForItem(item) {
+  return jobForUrl(item.url) || jobForUrl(item.finalUrl);
 }
 
 function inWindow(settings, now = new Date()) {
@@ -120,7 +127,11 @@ async function upsertFromScan(scan) {
     state.jobs[job.jobId] = job;
   }
   job.pageUrl = parsed.pageUrl;
-  job.totalParts = Math.max(job.totalParts || 0, parsed.totalParts);
+  job.totalParts = parsed.totalParts;
+  // Drop stray entries from earlier versions (e.g. the "View report" link counted as an extra part).
+  for (const [n, p] of Object.entries(job.parts)) {
+    if (Number(n) > job.totalParts && !ACTIVE.has(p.status) && p.status !== 'done') delete job.parts[n];
+  }
   if (parsed.expiresAt) job.expiresAt = parsed.expiresAt;
   for (const p of parsed.parts) {
     const cur = job.parts[p.part];
@@ -136,6 +147,7 @@ async function upsertFromScan(scan) {
   if (job.status === 'needs_auth' && raptNow && raptNow !== raptBefore) {
     job.status = 'running';
     job.notice = M('n_reauthDetected');
+    job.resumedAt = Date.now();
   }
   return job;
 }
@@ -144,11 +156,13 @@ async function upsertFromScan(scan) {
 async function adoptHistory(job) {
   let items = [];
   try {
-    items = await chrome.downloads.search({ urlRegex: `takeout/download\\?.*j=${job.jobId}`, limit: 0 });
+    items = await chrome.downloads.search({ filenameRegex: 'takeout-[^/\\\\]*\\.(zip|tgz|tar\\.gz)$', limit: 0 });
   } catch {
     items = [];
   }
   for (const item of items) {
+    // Page clicks record the manage page as url and the usercontent host as finalUrl; both carry the job id.
+    if (![item.url, item.finalUrl].some((u) => String(u || '').includes(job.jobId))) continue;
     const info = parsePartLink(item.url) || parsePartLink(item.finalUrl || '');
     const byName = partFromFilename(item.filename);
     const n = info?.part || byName?.part;
@@ -208,14 +222,38 @@ function scheduleRetry(job, p, error, resumeId = null) {
 }
 
 function requireAuth(job, reason) {
-  if (job.status === 'needs_auth') return;
-  job.status = 'needs_auth';
-  job.notice = reason;
+  if (job.status === 'needs_auth' || job.status === 'paused') return;
   for (const p of Object.values(job.parts)) {
     if (p.status === 'starting' || p.status === 'retrying') p.status = 'pending';
   }
+  // Google rejected us again right after a fresh verification: stop instead of looping forever.
+  if (job.resumedAt && Date.now() - job.resumedAt < AUTH_LOOP_MS) {
+    job.status = 'paused';
+    job.notice = M('n_authLoop');
+    job.resumedAt = 0;
+    notify(`auth-${job.jobId}`, 'nt_fatalTitle', 'n_authLoop');
+    return;
+  }
+  job.status = 'needs_auth';
+  job.notice = reason;
   notify(`auth-${job.jobId}`, 'nt_authTitle', 'nt_authBody');
-  chrome.tabs.create({ url: job.pageUrl, active: true }).catch(() => {});
+  void focusTakeoutTab(job);
+}
+
+// Reuse an open Takeout tab instead of opening a new one on every auth request.
+async function focusTakeoutTab(job) {
+  try {
+    const tabs = await chrome.tabs.query({ url: 'https://takeout.google.com/*' });
+    const tab = tabs.find((x) => String(x.url || '').includes(job.jobId)) || tabs[0];
+    if (tab) {
+      await chrome.tabs.update(tab.id, { active: true });
+      if (chrome.windows?.update) await chrome.windows.update(tab.windowId, { focused: true });
+      return;
+    }
+  } catch {
+    /* fall through */
+  }
+  await chrome.tabs.create({ url: job.pageUrl, active: true }).catch(() => {});
 }
 
 async function tick() {
@@ -331,7 +369,7 @@ function routeFilename(item, suggest) {
     return undefined;
   }
   if (!st || st.aux[item.id]) return suggest();
-  const hit = jobForUrl(item.url) || jobForUrl(item.finalUrl);
+  const hit = jobForItem(item);
   if (!hit?.job) return suggest();
   const looksHtml = /text\/html/i.test(item.mime || '') || !isArchiveName(item.filename);
   if (looksHtml) {
@@ -364,7 +402,7 @@ function routeFilename(item, suggest) {
 async function onCreated(item) {
   await load();
   if (authCancelled.has(item.id) || state.dl[item.id] || state.aux[item.id]) return;
-  const hit = jobForUrl(item.url);
+  const hit = jobForItem(item);
   if (!hit?.job) return;
   // A part link clicked on the page: track it instead of downloading it again.
   const p = hit.job.parts[hit.info.part] || (hit.job.parts[hit.info.part] = newPart({ part: hit.info.part, url: item.url }));
@@ -389,7 +427,19 @@ async function onChanged(delta) {
     }
     return;
   }
-  const ref = state.dl[delta.id];
+  let ref = state.dl[delta.id];
+  if (!ref && (delta.finalUrl || delta.filename || delta.state)) {
+    // Page-clicked parts only reveal their job once redirected to the usercontent host.
+    const [item] = await chrome.downloads.search({ id: delta.id });
+    const hit = item && jobForItem(item);
+    const n = hit?.job && (hit.info.part || partFromFilename(item.filename)?.part);
+    const p = n && (hit.job.parts[n] || (hit.job.parts[n] = newPart({ part: n, url: '' })));
+    if (!p || p.status === 'done') return;
+    ref = state.dl[delta.id] = { jobId: hit.job.jobId, part: n };
+    p.status = 'downloading';
+    p.downloadId = delta.id;
+    p.lastProgressAt = Date.now();
+  }
   if (!ref) return;
   const job = state.jobs[ref.jobId];
   const p = job?.parts[ref.part];
@@ -501,6 +551,7 @@ const handlers = {
     if (job.status !== 'running') job.sessionBytes = 0;
     job.status = 'running';
     job.notice = '';
+    job.resumedAt = 0;
     for (const p of Object.values(job.parts)) {
       if (p.downloadId && ACTIVE.has(p.status)) await chrome.downloads.resume(p.downloadId).catch(() => {});
     }

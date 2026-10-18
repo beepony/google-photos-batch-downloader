@@ -169,8 +169,8 @@ try {
   const zips = files.filter((f) => /^takeout-.*\.zip$/.test(f));
   const dupes = zips.filter((f) => / \(\d+\)\.zip$/.test(f));
   const job = st.jobs[0];
-  log(`authSeen=${authSeen} rangeResumes=${mock.state.rangeHits} zips=${zips.length} dupes=${dupes.length} hitsPerPart=${JSON.stringify(mock.state.hits.reduce((a, h) => ((a[h.part] = (a[h.part] || 0) + 1), a), {}))}`);
-  ok = job.status === 'done' && zips.length === PARTS && dupes.length === 0 && /ALL GOOD/.test(verifyOut) && authSeen;
+  log(`authSeen=${authSeen} rangeResumes=${mock.state.rangeHits} zips=${zips.length} dupes=${dupes.length} hitsPerPart=${JSON.stringify(mock.state.hits.reduce((a, h) => ((a[h.part] = (a[h.part] || 0) + 1), a), {}))} legacyHits=${mock.state.legacyHits}`);
+  ok = job.status === 'done' && zips.length === PARTS && dupes.length === 0 && /ALL GOOD/.test(verifyOut) && authSeen && mock.state.legacyHits === 0 && job.totalParts === PARTS;
   log(ok ? 'E2E PASS' : 'E2E FAIL');
 } catch (e) {
   console.error(e);

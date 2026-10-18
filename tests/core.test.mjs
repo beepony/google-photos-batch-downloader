@@ -35,6 +35,9 @@ test('parsePartLink reads zero-based index', () => {
   assert.equal(p.jobId, JOB);
   assert.equal(parsePartLink('https://evil.example/takeout/download?j=x&i=0'), null);
   assert.equal(parsePartLink('https://takeout.google.com/takeout/download?j=x'), null);
+  assert.equal(parsePartLink(`https://takeout.google.com/settings/takeout/download?i=4&j=${JOB}&download=true&rapt=R`).part, 5);
+  assert.equal(parsePartLink(`https://takeout-download.usercontent.google.com/download/takeout-x-1-010.zip?j=${JOB}&i=9&user=1`).part, 10);
+  assert.equal(parsePartLink(`https://evil.usercontent.google.com/download/x.zip?j=${JOB}&i=9`), null);
 });
 
 test('partFromFilename recognises duplicates', () => {
@@ -54,6 +57,7 @@ test('buildJobFromScan builds parts and fills missing links', () => {
   assert.equal(job.totalParts, 166);
   assert.equal(job.parts.length, 3);
   assert.match(job.parts[2].url, /i=2/);
+  assert.match(job.parts[0].url, /^https:\/\/takeout\.google\.com\/settings\/takeout\/download\?i=0&j=.*&download=true/);
   assert.match(job.parts[2].url, /rapt=TOKEN/);
   assert.equal(new Date(job.expiresAt).getDate(), 25);
 });

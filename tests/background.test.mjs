@@ -27,7 +27,12 @@ function makeChrome() {
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, openPopup: async () => {} },
     power: { requestKeepAwake() { fake.awake = true; }, releaseKeepAwake() { fake.awake = false; } },
     notifications: { create: (id, opts) => (fake.lastNotice = opts) },
-    tabs: { create: async (o) => (fake.openedTab = o.url) },
+    tabsList: [],
+    tabs: {
+      create: async (o) => { fake.openedTab = o.url; fake.tabsCreated = (fake.tabsCreated || 0) + 1; },
+      query: async () => fake.tabsList,
+      update: async (id) => (fake.focusedTab = id),
+    },
     i18n: { getUILanguage: () => fake.uiLang || 'en-US' },
     runtime: { onMessage: on('message'), onStartup: on('startup'), onInstalled: on('installed'), lastError: null, getURL: (p) => p },
     downloads: {
@@ -64,6 +69,7 @@ function makeChrome() {
         if (q.id !== undefined) list = list.filter((i) => i.id === q.id);
         if (q.state) list = list.filter((i) => i.state === q.state);
         if (q.urlRegex) list = list.filter((i) => new RegExp(q.urlRegex).test(i.url));
+        if (q.filenameRegex) list = list.filter((i) => new RegExp(q.filenameRegex).test(i.filename));
         return list.map((i) => ({ ...i }));
       },
       async cancel(id) { const i = items.get(id); if (i) { i.state = 'interrupted'; i.error = 'USER_CANCELED'; } },
@@ -245,4 +251,86 @@ test('notifications follow the chosen language', async () => {
   const [it] = [...fake.items.values()];
   await finish(fake, it.id);
   assert.match(fake.lastNotice.title, /完成/);
+});
+
+const usercontent = (p) =>
+  `https://takeout-download.usercontent.google.com/download/takeout-20261018T062654Z-1-${String(p).padStart(3, '0')}.zip?j=${JOB}&i=${p - 1}&user=999&authuser=0`;
+const pageUrl = `https://takeout.google.com/manage/archive/${JOB}?user=110&rapt=R1`;
+
+test('downloads use the settings/takeout/download URL, not the anchor href', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(2));
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const urls = [...fake.items.values()].map((i) => i.url);
+  assert.ok(urls.length > 0);
+  for (const u of urls) assert.match(u, /^https:\/\/takeout\.google\.com\/settings\/takeout\/download\?i=\d+&j=.*&download=true&rapt=R1$/);
+});
+
+test('"View report" link does not become an extra part', async () => {
+  const { send } = await boot();
+  const msg = scanMsg(3);
+  msg.records.push({ href: `https://takeout.google.com/takeout/download?j=${JOB}&i=3&user=110&rapt=R1`, label: '查看报告', text: '' });
+  const r = await send(msg);
+  assert.equal(r.data.summary.total, 3);
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.totalParts, 3);
+});
+
+test('files already downloaded by clicking on the page are adopted via finalUrl', async () => {
+  const { fake, send } = await boot();
+  for (const p of [1, 3]) {
+    fake.items.set(p, {
+      id: p, url: pageUrl, finalUrl: usercontent(p), mime: 'application/zip', state: 'complete', exists: true,
+      filename: `/Volumes/S/takeout-20261018T062654Z-1-${String(p).padStart(3, '0')}.zip`, fileSize: GB2, bytesReceived: GB2,
+    });
+  }
+  const r = await send(scanMsg(4));
+  assert.equal(r.data.summary.done, 2);
+  await send({ type: 'settings', settings: { concurrency: 4 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const started = [...fake.items.values()].filter((i) => i.state === 'in_progress').map((i) => Number(new URL(i.url).searchParams.get('i')) + 1).sort();
+  assert.deepEqual(started, [2, 4]);
+});
+
+test('a page click is tracked once it redirects to the usercontent host', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(2));
+  const item = { id: 7, url: pageUrl, finalUrl: pageUrl, mime: '', state: 'in_progress', exists: true, filename: '', bytesReceived: 0 };
+  fake.items.set(7, item);
+  await fake.listeners.created({ ...item });
+  item.finalUrl = usercontent(2);
+  item.filename = '/dl/takeout-20261018T062654Z-1-002.zip';
+  await fake.listeners.changed({ id: 7, filename: { current: item.filename } });
+  await settle();
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.parts.find((p) => p.part === 2).status, 'downloading');
+  await finish(fake, 7);
+  job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.parts.find((p) => p.part === 2).status, 'done');
+});
+
+test('auth reuses the open Takeout tab and stops looping after re-verification', async () => {
+  const { fake, send } = await boot();
+  fake.tabsList = [{ id: 42, windowId: 1, url: pageUrl }];
+  fake.behavior = () => ({ mime: 'text/html' });
+  await send(scanMsg(2));
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'needs_auth');
+  assert.equal(fake.focusedTab, 42);
+  assert.equal(fake.tabsCreated || 0, 0, 'no new tab');
+
+  // "Verified" (new rapt) but Google still answers with HTML -> pause, no loop.
+  await send(scanMsg(2, { rapt: 'R2' }));
+  await settle();
+  job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'paused');
+  assert.equal(job.notice.k, 'n_authLoop');
+  const before = fake.items.size;
+  await send(scanMsg(2, { rapt: 'R3' }));
+  await settle();
+  assert.equal(fake.items.size, before, 'paused job does not retry on its own');
 });
