@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Chrome Web Store submission kit in `store/`: bilingual listing text, privacy-practices answers, screenshots,
+  promo tiles and a checklist. `tools/store-assets.mjs` regenerates the images.
+
 ## 0.2.0 — 2026-10-18
 
 - Bilingual UI (English / 简体中文): popup, on-page panel, notifications, CSV manifest. Follows the browser

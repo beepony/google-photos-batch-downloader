@@ -14,6 +14,8 @@ extension/
 tests/                   node:test suites (no dependencies)
 harness/                 Mock Takeout server + real-Chrome end-to-end test
 tools/pack.sh            Builds the Web Store zip
+tools/store-assets.mjs   Renders Web Store screenshots and promo tiles into store/assets/
+store/                   Web Store listing text, privacy answers, submission checklist
 ```
 
 ## Flow

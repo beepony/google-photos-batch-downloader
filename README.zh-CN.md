@@ -89,7 +89,10 @@ node harness/e2e.mjs                # 真实 Chrome + 本地模拟 Takeout 服�
 PARTS=166 PART_BYTES=400000 node harness/e2e.mjs
 UI_LANG=en node harness/e2e.mjs     # 用英文界面运行
 tools/pack.sh                       # 打包 dist/takeout-batch-downloader-<版本>.zip
+node tools/store-assets.mjs         # 生成 Chrome 应用商店截图和宣传图
 ```
+
+Chrome 应用商店的文案、隐私问卷答案、图片和上架清单都在 [`store/`](store/README.zh-CN.md)。
 
 不需要安装任何依赖，只要 Node.js 20+ 和 Google Chrome。
 

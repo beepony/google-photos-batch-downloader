@@ -90,7 +90,10 @@ node harness/e2e.mjs                # real Chrome + local mock Takeout server
 PARTS=166 PART_BYTES=400000 node harness/e2e.mjs
 UI_LANG=en node harness/e2e.mjs     # run with the English UI
 tools/pack.sh                       # build dist/takeout-batch-downloader-<version>.zip
+node tools/store-assets.mjs         # render Chrome Web Store screenshots and promo tiles
 ```
+
+Chrome Web Store listing text, privacy answers, images and a submission checklist are in [`store/`](store/README.md).
 
 No dependencies to install — only Node.js 20+ and Google Chrome.
 
