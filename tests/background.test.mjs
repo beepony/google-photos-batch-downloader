@@ -1,0 +1,248 @@
+// Drives the real service worker against a fake chrome.* runtime.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { buildPartUrl } from '../extension/src/core.js';
+
+const JOB = '0d5e7a11-c0de-4b2a-9e61-7a6e0a7c1234';
+const GB2 = 2 * 1024 ** 3;
+
+function makeChrome() {
+  const listeners = {};
+  const on = (name) => ({ addListener: (fn) => (listeners[name] = fn) });
+  const store = {};
+  const items = new Map();
+  let nextId = 100;
+  const fake = {
+    items,
+    listeners,
+    store,
+    behavior: () => ({ mime: 'application/zip', ok: true }),
+    storage: {
+      local: {
+        get: async (keys) => Object.fromEntries(keys.filter((k) => k in store).map((k) => [k, structuredClone(store[k])])),
+        set: async (obj) => Object.assign(store, structuredClone(obj)),
+      },
+    },
+    alarms: { create() {}, clear() {}, onAlarm: on('alarm') },
+    action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, openPopup: async () => {} },
+    power: { requestKeepAwake() { fake.awake = true; }, releaseKeepAwake() { fake.awake = false; } },
+    notifications: { create: (id, opts) => (fake.lastNotice = opts) },
+    tabs: { create: async (o) => (fake.openedTab = o.url) },
+    i18n: { getUILanguage: () => fake.uiLang || 'en-US' },
+    runtime: { onMessage: on('message'), onStartup: on('startup'), onInstalled: on('installed'), lastError: null, getURL: (p) => p },
+    downloads: {
+      onDeterminingFilename: on('determine'),
+      onCreated: on('created'),
+      onChanged: on('changed'),
+      async download({ url }) {
+        const id = nextId++;
+        const b = fake.behavior(url);
+        const part = Number(new URL(url).searchParams.get('i')) + 1;
+        const item = {
+          id,
+          url,
+          finalUrl: url,
+          mime: b.mime,
+          filename: b.mime === 'text/html' ? '/dl/download.html' : `/dl/takeout-20261018T062654Z-1-${String(part).padStart(3, '0')}.zip`,
+          state: 'in_progress',
+          bytesReceived: 0,
+          totalBytes: GB2,
+          fileSize: 0,
+          exists: true,
+          canResume: false,
+          paused: false,
+        };
+        items.set(id, item);
+        listeners.created?.(item);
+        listeners.determine?.(item, (s) => {
+          if (s?.filename) item.filename = '/dl/' + s.filename;
+        });
+        return id;
+      },
+      async search(q) {
+        let list = [...items.values()];
+        if (q.id !== undefined) list = list.filter((i) => i.id === q.id);
+        if (q.state) list = list.filter((i) => i.state === q.state);
+        if (q.urlRegex) list = list.filter((i) => new RegExp(q.urlRegex).test(i.url));
+        return list.map((i) => ({ ...i }));
+      },
+      async cancel(id) { const i = items.get(id); if (i) { i.state = 'interrupted'; i.error = 'USER_CANCELED'; } },
+      async erase({ id }) { items.delete(id); },
+      async pause(id) { items.get(id).paused = true; },
+      async resume(id) { const i = items.get(id); i.paused = false; i.state = 'in_progress'; },
+      show() {},
+      showDefaultFolder() {},
+    },
+  };
+  return fake;
+}
+
+const settle = () => new Promise((r) => setTimeout(r, 30));
+
+async function boot() {
+  const fake = makeChrome();
+  globalThis.chrome = fake;
+  globalThis.btoa = (s) => Buffer.from(s, 'binary').toString('base64');
+  const mod = await import(`../extension/src/background.js?x=${Math.random()}`);
+  const send = (msg) =>
+    new Promise((resolve) => {
+      fake.listeners.message(msg, {}, (r) => resolve(r));
+    });
+  return { fake, send, mod };
+}
+
+function scanMsg(n, opts = {}) {
+  const records = [];
+  for (let p = 1; p <= n; p += 1) {
+    records.push({
+      href: buildPartUrl({ jobId: JOB, part: p, user: '110', rapt: opts.rapt || 'R1' }),
+      label: `下载第 ${p} 部分（共 ${n} 部分）`,
+      text: `第 ${p} 部分 2GB`,
+    });
+  }
+  return {
+    type: 'scan',
+    pageUrl: `https://takeout.google.com/manage/archive/${JOB}?user=110&rapt=${opts.rapt || 'R1'}`,
+    pageText: '将于 2026年10月25日 14:50 过期',
+    records,
+  };
+}
+
+async function finish(fake, id, size = GB2 - 1000) {
+  const i = fake.items.get(id);
+  i.state = 'complete';
+  i.bytesReceived = size;
+  i.fileSize = size;
+  await fake.listeners.changed({ id, state: { current: 'complete' } });
+  await settle();
+}
+
+test('queues parts with concurrency, completes, and finishes job', async () => {
+  const { fake, send } = await boot();
+  let r = await send(scanMsg(5));
+  assert.equal(r.data.summary.total, 5);
+  await send({ type: 'settings', settings: { concurrency: 2, subfolder: 'Google Takeout' } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let active = [...fake.items.values()].filter((i) => i.state === 'in_progress');
+  assert.equal(active.length, 2);
+  assert.match(active[0].filename, /\/dl\/Google Takeout\/takeout-.*-001\.zip/);
+  assert.equal(fake.awake, true);
+
+  // finish everything one by one
+  for (let guard = 0; guard < 10; guard += 1) {
+    active = [...fake.items.values()].filter((i) => i.state === 'in_progress');
+    if (!active.length) break;
+    await finish(fake, active[0].id);
+  }
+  const st = (await send({ type: 'getState' })).data;
+  const job = st.jobs[0];
+  assert.equal(job.summary.done, 5);
+  assert.equal(job.status, 'done');
+  assert.equal(fake.items.size, 5, 'no duplicate downloads');
+  assert.equal(fake.awake, false);
+  assert.match(fake.lastNotice.title, /complete/i, 'English UI by default for non-zh browser');
+});
+
+test('network interruption resumes the same download', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(2));
+  await send({ type: 'settings', settings: { concurrency: 1 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const [first] = [...fake.items.values()];
+  first.state = 'interrupted';
+  first.error = 'NETWORK_FAILED';
+  first.canResume = true;
+  first.bytesReceived = 1000;
+  await fake.listeners.changed({ id: first.id, state: { current: 'interrupted' } });
+  await settle();
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.parts.find((p) => p.part === 1).status, 'retrying');
+  // Emulate the back-off elapsing, then let the periodic alarm fire.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 60_000;
+  await fake.listeners.alarm({ name: 'takeout-tick' });
+  await settle();
+  Date.now = realNow;
+  assert.equal(fake.items.get(first.id).state, 'in_progress', 'resumed via chrome.downloads.resume');
+  const part1 = [...fake.items.values()].filter((i) => /[?&]i=0(&|$)/.test(i.url));
+  assert.equal(part1.length, 1, 'did not start a duplicate download of part 1');
+});
+
+test('HTML re-auth response pauses job and resumes after new rapt', async () => {
+  const { fake, send } = await boot();
+  fake.behavior = () => ({ mime: 'text/html' });
+  await send(scanMsg(3));
+  await send({ type: 'settings', settings: { concurrency: 2 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'needs_auth');
+  assert.match(fake.openedTab, /manage\/archive/);
+  assert.equal(job.parts.filter((p) => p.status === 'done').length, 0);
+
+  fake.behavior = () => ({ mime: 'application/zip' });
+  await send(scanMsg(3, { rapt: 'R2' }));
+  await settle();
+  job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'running');
+  const zips = [...fake.items.values()].filter((i) => i.state === 'in_progress' && /\.zip$/.test(i.filename));
+  assert.ok(zips.length >= 1);
+  assert.match(zips[0].url, /rapt=R2/);
+});
+
+test('data budget pauses after the configured amount', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(6));
+  await send({ type: 'settings', settings: { concurrency: 3, dataBudgetGB: 4 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let active = [...fake.items.values()].filter((i) => i.state === 'in_progress');
+  assert.equal(active.length, 2, 'only 2 x 2GB fit in 4GB');
+  for (const a of active) await finish(fake, a.id);
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'paused');
+  assert.equal(job.notice.k, 'n_budget');
+  assert.equal(job.summary.done, 2);
+});
+
+test('parts clicked manually on the page are adopted, not duplicated', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(3));
+  // user clicks part 2 on the page before pressing start
+  const url = buildPartUrl({ jobId: JOB, part: 2, user: '110', rapt: 'R1' });
+  const id = await fake.downloads.download({ url });
+  await settle();
+  await send({ type: 'settings', settings: { concurrency: 3 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const urls = [...fake.items.values()].map((i) => Number(new URL(i.url).searchParams.get('i')) + 1).sort();
+  assert.deepEqual(urls, [1, 2, 3]);
+  await finish(fake, id);
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.parts.find((p) => p.part === 2).status, 'done');
+});
+
+test('truncated file is retried', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(1));
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const [it] = [...fake.items.values()];
+  await finish(fake, it.id, 5000);
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.parts[0].status, 'retrying');
+  assert.equal(job.parts[0].error.k, 'e_size');
+});
+
+test('notifications follow the chosen language', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(1));
+  await send({ type: 'settings', settings: { language: 'zh' } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const [it] = [...fake.items.values()];
+  await finish(fake, it.id);
+  assert.match(fake.lastNotice.title, /完成/);
+});

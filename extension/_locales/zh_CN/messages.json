@@ -1,0 +1,5 @@
+{
+  "extName": { "message": "Takeout 批量下载器" },
+  "extShortName": { "message": "Takeout 下载" },
+  "extDescription": { "message": "一键批量下载 Google Takeout（含 Google 相册）的所有分卷：自动排队、断点续传、失败重试、完整校验。" }
+}

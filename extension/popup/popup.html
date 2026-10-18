@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Takeout Batch Downloader</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="masthead">
+    <div class="mark" aria-hidden="true">
+      <svg viewBox="0 0 32 32"><rect x="3" y="7" width="26" height="20" rx="4"/><path d="M16 11v10m-4-4 4 4 4-4"/></svg>
+    </div>
+    <div>
+      <h1 data-i18n="appName"></h1>
+      <p class="tag" data-i18n="tagline"></p>
+    </div>
+    <div class="lang-switch" role="group" aria-label="Language">
+      <button data-lang="zh">中</button><button data-lang="en">EN</button>
+    </div>
+    <button id="gear" class="icon-btn" data-i18n-title="settings" data-i18n-aria="settings">⚙</button>
+  </header>
+
+  <section id="settings" class="settings" hidden>
+    <label><span data-i18n="concurrency"></span><select id="s-concurrency"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select><span data-i18n="concurrencyUnit"></span></label>
+    <label><span data-i18n="saveTo"></span><input id="s-subfolder" type="text" placeholder="Google Takeout" /></label>
+    <label><span data-i18n="budget"></span><input id="s-budget" type="number" min="0" step="1" /> GB <small data-i18n="budgetHint"></small></label>
+    <label class="check"><input id="s-window" type="checkbox" /><span data-i18n="windowOnly"></span>
+      <input id="s-wstart" type="time" />–<input id="s-wend" type="time" /> <span data-i18n="windowSuffix"></span></label>
+    <label class="check"><input id="s-awake" type="checkbox" /><span data-i18n="keepAwake"></span></label>
+    <label class="check"><input id="s-notify" type="checkbox" /><span data-i18n="notify"></span></label>
+    <label><span data-i18n="language"></span><select id="s-language"><option value="auto" data-i18n="langAuto"></option><option value="zh">中文</option><option value="en">English</option></select></label>
+    <p class="hint" data-i18n="externalDriveHint"></p>
+  </section>
+
+  <main id="jobs"></main>
+
+  <section id="empty" class="empty" hidden>
+    <div class="stack" aria-hidden="true"><span></span><span></span><span></span></div>
+    <h2 data-i18n="emptyTitle"></h2>
+    <ol>
+      <li data-i18n="emptyStep1"></li>
+      <li data-i18n="emptyStep2"></li>
+      <li data-i18n="emptyStep3"></li>
+    </ol>
+    <a class="btn ghost" href="https://takeout.google.com/manage" target="_blank" rel="noopener" data-i18n="openTakeout"></a>
+  </section>
+
+  <template id="job-tpl">
+    <article class="job">
+      <div class="job-head">
+        <div>
+          <h2 class="job-title"></h2>
+          <p class="job-sub"></p>
+        </div>
+        <span class="pill"></span>
+      </div>
+      <div class="ring-row">
+        <div class="big"><b class="pct">0</b><span>%</span></div>
+        <dl class="stats">
+          <div><dt data-i18n="statParts"></dt><dd class="st-parts"></dd></div>
+          <div><dt data-i18n="statDownloaded"></dt><dd class="st-bytes"></dd></div>
+          <div><dt data-i18n="statSpeed"></dt><dd class="st-speed"></dd></div>
+          <div><dt data-i18n="statEta"></dt><dd class="st-eta"></dd></div>
+        </dl>
+      </div>
+      <div class="track"><div class="fill"></div></div>
+      <p class="notice" hidden></p>
+      <div class="grid" role="list"></div>
+      <div class="legend"><i class="lg done"></i><span data-i18n="legendDone"></span><i class="lg active"></i><span data-i18n="legendActive"></span><i class="lg retry"></i><span data-i18n="legendRetry"></span><i class="lg failed"></i><span data-i18n="legendFailed"></span><i class="lg pending"></i><span data-i18n="legendPending"></span></div>
+      <div class="actions">
+        <button class="btn primary act-main"></button>
+        <button class="btn ghost act-retry" hidden data-i18n="btnRetryFailed"></button>
+      </div>
+      <details class="more">
+        <summary data-i18n="more"></summary>
+        <div class="more-body">
+          <button class="btn ghost act-verify" data-i18n="exportVerify"></button>
+          <button class="btn ghost act-manifest" data-i18n="exportManifest"></button>
+          <button class="btn ghost act-folder" data-i18n="openFolder"></button>
+          <button class="btn ghost act-page" data-i18n="openPage"></button>
+          <div class="ranges">
+            <input class="range-input" data-i18n-placeholder="rangePlaceholder" />
+            <button class="btn ghost act-mark" data-i18n="markHave"></button>
+            <button class="btn ghost act-redo" data-i18n="redownload"></button>
+          </div>
+          <button class="btn danger act-remove" data-i18n="removeJob"></button>
+          <p class="hint verify-hint"></p>
+        </div>
+      </details>
+    </article>
+  </template>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
