@@ -154,11 +154,26 @@ export function buildJobFromScan({ pageUrl, pageText = '', title = '', records =
       /* ignore */
     }
   }
+  // The re-auth token lives in the part anchors even when the tab URL itself has none
+  // (e.g. a tab opened as /manage/archive/<job> without ?rapt=).
   let rapt = '';
-  try {
-    rapt = new URL(pageUrl).searchParams.get('rapt') || '';
-  } catch {
-    /* ignore */
+  for (const r of records) {
+    try {
+      const v = r.href && new URL(r.href, pageUrl).searchParams.get('rapt');
+      if (v) {
+        rapt = v;
+        break;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  if (!rapt) {
+    try {
+      rapt = new URL(pageUrl).searchParams.get('rapt') || '';
+    } catch {
+      /* ignore */
+    }
   }
   for (const p of parts.values()) p.url = buildPartUrl({ jobId, part: p.part, rapt });
   const list = [...parts.values()].sort((a, b) => a.part - b.part);
@@ -168,6 +183,7 @@ export function buildJobFromScan({ pageUrl, pageText = '', title = '', records =
     jobId,
     user,
     pageUrl,
+    rapt,
     title: title || 'Google Takeout',
     totalParts,
     expiresAt: parseExpiry(pageText),

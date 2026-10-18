@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2 — 2026-10-18
+
+- Fix: when the Takeout tab was opened without `?rapt=` in its address (e.g. from the Takeout menu), the
+  re-auth token was missing from download requests, so Google kept answering with a sign-in page. The token
+  is now read from the part links on the page.
+- Parts that Chrome finished earlier are counted as done even if the files were later moved to another folder.
+- A token-free trace of the last HTML response is kept for troubleshooting.
+
 ## 0.2.1 — 2026-10-18
 
 - Fix: the extension kept asking for re-verification even after the user had verified. The page's

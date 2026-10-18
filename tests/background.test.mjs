@@ -334,3 +334,25 @@ test('auth reuses the open Takeout tab and stops looping after re-verification',
   await settle();
   assert.equal(fake.items.size, before, 'paused job does not retry on its own');
 });
+
+test('rapt is taken from the part links when the tab URL has none', async () => {
+  const { fake, send } = await boot();
+  const msg = scanMsg(2, { rapt: 'FROMLINK' });
+  msg.pageUrl = `https://takeout.google.com/manage/archive/${JOB}`;
+  await send(msg);
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const urls = [...fake.items.values()].map((i) => i.url);
+  assert.ok(urls.length > 0);
+  for (const u of urls) assert.match(u, /rapt=FROMLINK$/);
+});
+
+test('parts finished earlier and then moved to another folder still count as done', async () => {
+  const { fake, send } = await boot();
+  fake.items.set(1, {
+    id: 1, url: pageUrl, finalUrl: usercontent(1), mime: 'application/zip', state: 'complete', exists: false,
+    filename: '/Volumes/S/takeout-20261018T062654Z-1-001.zip', fileSize: GB2, totalBytes: GB2, bytesReceived: GB2,
+  });
+  const r = await send(scanMsg(2));
+  assert.equal(r.data.summary.done, 1);
+});

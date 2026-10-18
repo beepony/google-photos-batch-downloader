@@ -110,7 +110,7 @@ async function upsertFromScan(scan) {
   const parsed = buildJobFromScan(scan);
   if (!parsed) return null;
   let job = state.jobs[parsed.jobId];
-  const raptBefore = job ? new URL(job.pageUrl).searchParams.get('rapt') : '';
+  const raptBefore = job?.rapt || '';
   if (!job) {
     job = {
       jobId: parsed.jobId,
@@ -127,6 +127,7 @@ async function upsertFromScan(scan) {
     state.jobs[job.jobId] = job;
   }
   job.pageUrl = parsed.pageUrl;
+  if (parsed.rapt) job.rapt = parsed.rapt;
   job.totalParts = parsed.totalParts;
   // Drop stray entries from earlier versions (e.g. the "View report" link counted as an extra part).
   for (const [n, p] of Object.entries(job.parts)) {
@@ -143,7 +144,7 @@ async function upsertFromScan(scan) {
     }
   }
   await adoptHistory(job);
-  const raptNow = new URL(job.pageUrl).searchParams.get('rapt');
+  const raptNow = job.rapt || '';
   if (job.status === 'needs_auth' && raptNow && raptNow !== raptBefore) {
     job.status = 'running';
     job.notice = M('n_reauthDetected');
@@ -169,7 +170,9 @@ async function adoptHistory(job) {
     if (!n) continue;
     const p = job.parts[n] || (job.parts[n] = newPart({ part: n, url: info?.url || '' }));
     if (p.status === 'done') continue;
-    if (item.state === 'complete' && item.exists && isArchiveName(item.filename)) {
+    // Chrome's history proves the part finished even if the user later moved the file elsewhere
+    // (exists === false); the verify script is the final check.
+    if (item.state === 'complete' && isArchiveName(item.filename) && sizeLooksRight(item.fileSize || item.totalBytes, p.sizeBytes)) {
       markDone(job, p, item, false);
     } else if (item.state === 'in_progress' && !ACTIVE.has(p.status)) {
       p.status = 'downloading';
@@ -388,6 +391,9 @@ function routeFilename(item, suggest) {
         p.attempts = Math.max(0, (p.attempts || 1) - 1);
         p.downloadId = null;
       }
+      // Keep a token-free trace of where Google sent us, for troubleshooting.
+      const strip = (u) => String(u || '').replace(/([?&](?:rapt|user|j)=)[^&]*/g, '$1…');
+      job.lastHtml = { at: Date.now(), part: hit.info.part, url: strip(item.url), finalUrl: strip(item.finalUrl), mime: item.mime || '' };
       requireAuth(job, M('n_auth'));
       await save();
       await updateChrome(true);

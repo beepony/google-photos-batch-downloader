@@ -79,7 +79,7 @@ try {
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'allowAndName', downloadPath: downloads, eventsEnabled: true }).catch(() => {});
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'default' }).catch(() => {});
 
-  const { targetId } = await cdp.send('Target.createTarget', { url: `https://takeout.google.com/manage/archive/${JOB}?user=110&rapt=R1` });
+  const { targetId } = await cdp.send('Target.createTarget', { url: `https://takeout.google.com/manage/archive/${JOB}` });
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   await cdp.send('Runtime.enable', {}, sessionId);
   await sleep(2500);
@@ -136,7 +136,7 @@ try {
       const tabs = (await cdp.send('Target.getTargets')).targetInfos.filter((t) => t.type === 'page' && t.url.includes('/manage/archive/'));
       for (const t of tabs) {
         const s2 = (await cdp.send('Target.attachToTarget', { targetId: t.targetId, flatten: true })).sessionId;
-        await cdp.send('Page.navigate', { url: `https://takeout.google.com/manage/archive/${JOB}?user=110&rapt=R2` }, s2);
+        await cdp.send('Page.navigate', { url: `https://takeout.google.com/manage/archive/${JOB}` }, s2);
       }
     }
     if (authSeen && job.status === 'running' && active > 0 && s.done >= 10 && !globalThis.__midShot) {
