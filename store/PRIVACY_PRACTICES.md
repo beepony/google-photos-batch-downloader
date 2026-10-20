@@ -79,5 +79,5 @@ Tick all three certifications / 三项承诺全部勾选:
 ## Privacy policy URL / 隐私权政策网址
 
 ```text
-https://github.com/beepony/takeout-batch-downloader/blob/main/docs/PRIVACY.md
+https://github.com/beepony/google-photos-batch-downloader/blob/main/docs/PRIVACY.md
 ```

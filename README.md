@@ -2,29 +2,35 @@
   <img src="extension/icons/icon128.png" width="88" alt="" />
 </p>
 
-<h1 align="center">Takeout Batch Downloader</h1>
+<h1 align="center">Google Photos Batch Downloader</h1>
 
 <p align="center">
-  <b>One click to download every part of a Google Takeout export — queued, auto-resumed, retried and verified.</b><br/>
+  <b>Download all your Google Photos at once.</b><br/>
+  A free, open-source Chrome / Edge extension that bulk-downloads every zip part of a Google Takeout export
+  in one click: queued, auto-resumed, retried and verified.<br/><br/>
   <a href="README.zh-CN.md">中文说明</a> ·
   <a href="docs/USER_GUIDE.md">User guide</a> ·
+  <a href="#faq">FAQ</a> ·
   <a href="docs/ARCHITECTURE.md">Architecture</a> ·
   <a href="docs/PRIVACY.md">Privacy</a>
 </p>
 
 ---
 
-Exporting Google Photos with [Google Takeout](https://takeout.google.com) gives you dozens or hundreds of
-2 GB zip files, each with its own **Download** button. Clicking them one by one is slow and error-prone: Chrome
-blocks "multiple downloads", Google keeps asking you to sign in again, connections drop, and you end up with
-duplicates like `takeout-…-009 (1).zip` and no idea which parts are still missing.
+**Want to back up Google Photos to a computer or external hard drive, or free up Google storage?** The official
+way is [Google Takeout](https://takeout.google.com). For a large library, though, Takeout splits the export into dozens
+or hundreds of 2 GB (or 50 GB) zip files, each with its own **Download** button. Downloading them one by one is slow and
+error-prone. Chrome blocks "multiple downloads", Google keeps asking you to sign in again, connections drop, and
+you end up with duplicates like `takeout-…-009 (1).zip` and no idea which parts are still missing.
 
-This Chrome extension adds a **Download all** button to the Takeout page and takes care of the rest.
+**Google Photos Batch Downloader** adds a **Download all** button to the Takeout page and takes care of the rest:
+it downloads every part, resumes broken downloads, skips duplicates, and verifies that every zip file extracts.
+It also works for any other Google Takeout export (Google Drive, Gmail, YouTube…).
 
 <p align="center">
-  <img src="docs/images/page-button-en.png" width="380" alt="Download all button on the Takeout page" />
+  <img src="docs/images/page-button-en.png" width="380" alt="Google Photos Batch Downloader: Download all button on the Google Takeout page" />
   &nbsp;
-  <img src="docs/images/popup-en.png" width="380" alt="Extension popup showing progress" />
+  <img src="docs/images/popup-en.png" width="380" alt="Google Photos Batch Downloader popup showing Takeout download progress" />
 </p>
 
 ## Features
@@ -82,6 +88,39 @@ See the full [user guide](docs/USER_GUIDE.md) for settings, troubleshooting and 
 - It cannot sign in for you; passwords and passkeys are always entered by you, on Google's own page.
 - It does not upload your data anywhere. Everything stays in your browser and your disk — see [PRIVACY.md](docs/PRIVACY.md).
 
+## FAQ
+
+### How do I download all my Google Photos at once?
+Create an export of Google Photos at [takeout.google.com](https://takeout.google.com), open its "Download your files"
+page, and click **Download all** in the panel this extension adds. Every part is downloaded automatically.
+
+### How do I download multiple Google Takeout files at the same time?
+The extension queues all parts and downloads 1–6 at a time (configurable), so you never click each link by hand.
+
+### Why does Google Takeout keep asking me to sign in?
+Google asks you to re-verify roughly every 20 minutes before a *new* part can start. This is a Google security rule
+and cannot be turned off. Parts that are already downloading keep going. The extension starts several parts right after
+each verification, so you need far fewer checks. It also reminds you with a notification and a chime.
+
+### My Takeout download failed or stopped halfway. Do I have to start over?
+No. Interrupted downloads resume with HTTP Range requests, failed parts retry automatically, and parts you already have
+are skipped.
+
+### Can I save Google Photos directly to an external hard drive?
+Yes. Set Chrome's download location (Settings → Downloads) to a folder on the drive before you start.
+
+### How do I check that the Takeout zip files are not corrupted?
+Use **More → Export verify script**, then run `bash verify-takeout.sh` in the download folder. It tests every zip with
+`unzip -t` and lists anything missing or broken.
+
+### Can I delete photos from Google Photos after backing them up?
+The extension never deletes anything. Once the verify script reports `ALL GOOD` and your files are stored safely, you
+can delete photos in Google Photos yourself to free up storage.
+
+### Is it safe? Does it upload my photos anywhere?
+No servers, no analytics. Files go straight from Google to your disk through Chrome's own download manager. The code is
+open source. See [PRIVACY.md](docs/PRIVACY.md).
+
 ## Development
 
 ```bash
@@ -89,7 +128,7 @@ node --test tests/*.test.mjs        # unit tests + service worker against a fake
 node harness/e2e.mjs                # real Chrome + local mock Takeout server
 PARTS=166 PART_BYTES=400000 node harness/e2e.mjs
 UI_LANG=en node harness/e2e.mjs     # run with the English UI
-tools/pack.sh                       # build dist/takeout-batch-downloader-<version>.zip
+tools/pack.sh                       # build dist/google-photos-batch-downloader-<version>.zip
 node tools/store-assets.mjs         # render Chrome Web Store screenshots and promo tiles
 ```
 

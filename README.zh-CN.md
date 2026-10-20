@@ -2,28 +2,32 @@
   <img src="extension/icons/icon128.png" width="88" alt="" />
 </p>
 
-<h1 align="center">Takeout 批量下载器</h1>
+<h1 align="center">Google Photos 批量下载</h1>
 
 <p align="center">
-  <b>一键下载 Google Takeout 导出的全部分卷：自动排队、断点续传、失败重试、完整校验。</b><br/>
+  <b>一键下载 Google 相册里的全部照片和视频。</b><br/>
+  免费开源的 Chrome / Edge 插件：Google Takeout 导出的所有 zip 分卷一键批量下载，自动排队、断点续传、失败重试、完整校验。<br/><br/>
   <a href="README.md">English</a> ·
   <a href="docs/USER_GUIDE.zh-CN.md">使用指南</a> ·
+  <a href="#常见问题">常见问题</a> ·
   <a href="docs/ARCHITECTURE.md">架构说明（英文）</a> ·
   <a href="docs/PRIVACY.zh-CN.md">隐私说明</a>
 </p>
 
 ---
 
-用 [Google Takeout](https://takeout.google.com) 导出 Google 相册，会得到几十甚至上百个 2GB 的 zip 分卷，每个都要单独点“下载”。
+**想把 Google 相册（Google Photos）备份到电脑或移动硬盘，或者清理 Google 存储空间？** 官方方法是用
+[Google Takeout](https://takeout.google.com) 导出。但照片一多，Takeout 会拆成几十甚至上百个 2GB（或 50GB）的 zip 分卷，每个都要单独点“下载”。
 一个个点不仅慢，还容易出问题：Chrome 拦截“自动下载多个文件”，Google 反复要求重新验证身份，网络一断就要重来，
 最后还会冒出 `takeout-…-009 (1).zip` 这样的重复文件，搞不清到底还缺哪几个。
 
-这个 Chrome 插件会在 Takeout 页面上加一个**“一键下载全部”**按钮，剩下的事情交给它。
+**Google Photos 批量下载**会在 Takeout 页面上加一个**“一键下载全部”**按钮，剩下的事情交给它：下载所有分卷，断点续传，跳过重复文件，
+最后检查每个 zip 都能正常解压。Google 云端硬盘、Gmail、YouTube 等其他 Takeout 导出也同样适用。
 
 <p align="center">
-  <img src="docs/images/page-button-zh.png" width="380" alt="Takeout 页面上的一键下载按钮" />
+  <img src="docs/images/page-button-zh.png" width="380" alt="Google Photos 批量下载：Google Takeout 页面上的一键下载全部按钮" />
   &nbsp;
-  <img src="docs/images/popup-zh.png" width="380" alt="插件弹窗显示下载进度" />
+  <img src="docs/images/popup-zh.png" width="380" alt="Google Photos 批量下载插件弹窗显示 Takeout 下载进度" />
 </p>
 
 ## 功能
@@ -81,6 +85,33 @@
 - 不会替你登录；密码和通行密钥始终由你本人在 Google 自己的页面上输入。
 - 不会把你的数据上传到任何地方，所有数据只在你的浏览器和硬盘里，详见[隐私说明](docs/PRIVACY.zh-CN.md)。
 
+## 常见问题
+
+### 怎么一次性下载 Google 相册里的所有照片？
+在 [takeout.google.com](https://takeout.google.com) 只勾选 Google 相册创建导出，打开“下载您的文件”页面，点插件加上的**一键下载全部**，所有分卷会自动下载。
+
+### Google Takeout 有很多个文件，怎么批量下载？
+插件会把所有分卷加入队列，可设置同时下载 1–6 个，不用再一个个手动点。
+
+### 为什么 Google Takeout 下载时总是要求重新登录/验证身份？
+Google 大约每 20 分钟要求重新验证一次，才允许开始新的分卷。这是 Google 的安全机制，无法关闭；已经在下载的分卷不受影响。
+插件会在每次验证后集中启动多个分卷，减少验证次数，并用通知和提示音提醒你。
+
+### Takeout 下载失败或中断了，需要从头再来吗？
+不需要。中断的下载会通过 HTTP Range 请求断点续传，失败的分卷会自动重试，已经下完的分卷会自动跳过。
+
+### 能直接把 Google 相册备份到移动硬盘吗？
+可以。开始前在 Chrome 设置 → 下载内容 → 位置 里改成移动硬盘上的文件夹即可。
+
+### 怎么确认下载的 zip 文件没有损坏、能正常解压？
+**更多操作 → 导出校验脚本**，在下载文件夹里运行 `bash verify-takeout.sh`，它会用 `unzip -t` 逐个检查，列出缺失或损坏的分卷。
+
+### 备份好之后可以删除 Google 相册里的照片吗？
+插件不会删除任何内容。校验脚本显示 `ALL GOOD` 并且文件已经妥善保存后，你可以自己到 Google 相册里删除，释放存储空间。
+
+### 安全吗？会上传我的照片吗？
+没有服务器，没有统计。文件通过 Chrome 自带的下载功能，直接从 Google 下载到你的硬盘，代码完全开源。详见[隐私说明](docs/PRIVACY.zh-CN.md)。
+
 ## 开发
 
 ```bash
@@ -88,7 +119,7 @@ node --test tests/*.test.mjs        # 单元测试 + 用模拟 chrome.* API 驱�
 node harness/e2e.mjs                # 真实 Chrome + 本地模拟 Takeout 服务器的端到端测试
 PARTS=166 PART_BYTES=400000 node harness/e2e.mjs
 UI_LANG=en node harness/e2e.mjs     # 用英文界面运行
-tools/pack.sh                       # 打包 dist/takeout-batch-downloader-<版本>.zip
+tools/pack.sh                       # 打包 dist/google-photos-batch-downloader-<版本>.zip
 node tools/store-assets.mjs         # 生成 Chrome 应用商店截图和宣传图
 ```
 

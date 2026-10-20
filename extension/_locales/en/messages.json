@@ -1,5 +1,11 @@
 {
-  "extName": { "message": "Takeout Batch Downloader" },
-  "extShortName": { "message": "Takeout DL" },
-  "extDescription": { "message": "Download every part of a Google Takeout export (e.g. Google Photos) in one click — queued, auto-resumed, retried and verified." }
+  "extName": {
+    "message": "Google Photos Batch Downloader"
+  },
+  "extShortName": {
+    "message": "Photos DL"
+  },
+  "extDescription": {
+    "message": "Bulk download all Google Photos from Google Takeout in one click: every zip part queued, auto-resumed and verified."
+  }
 }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — 2026-10-20
+
+- Renamed to **Google Photos Batch Downloader** (中文：**Google Photos 批量下载**). The GitHub repository moved to
+  `beepony/google-photos-batch-downloader` (old links redirect).
+- README, store listing and docs rewritten for search: clearer "download all Google Photos" / Takeout bulk
+  download wording, a FAQ section in both languages, descriptive image alt text.
+
 ## 0.4.2 — 2026-10-20
 
 - Fix: "Keep computer awake" only blocked system sleep, so the display still turned off and the OS locked the

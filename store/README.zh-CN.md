@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-把 **Takeout 批量下载器** 发布到 Chrome 应用商店需要的所有东西。
+把 **Google Photos 批量下载** 发布到 Chrome 应用商店需要的所有东西。
 
 | 文件 | 用途 |
 |---|---|
@@ -10,7 +10,7 @@
 | [`PRIVACY_PRACTICES.md`](PRIVACY_PRACTICES.md) | **隐私权规范**页面要填的内容：单一用途、每个权限的理由、数据使用 |
 | [`assets/en/`](assets/en)、[`assets/zh/`](assets/zh) | 1280×800 截图 5 张、440×280 小宣传图、1400×560 大幅宣传图 |
 | [`../tools/store-assets.mjs`](../tools/store-assets.mjs) | 重新生成这些图片（`node tools/store-assets.mjs`，需要 Chrome） |
-| [`../tools/pack.sh`](../tools/pack.sh) | 打包上传用的 zip：`dist/takeout-batch-downloader-<版本>.zip` |
+| [`../tools/pack.sh`](../tools/pack.sh) | 打包上传用的 zip：`dist/google-photos-batch-downloader-<版本>.zip` |
 
 ## 上架步骤
 
@@ -22,7 +22,7 @@
 ### 上传
 - [ ] `node --test tests/*.test.mjs` 全部通过。
 - [ ] 如果这个版本号上传过，先改 `extension/manifest.json` 里的 `version`，并更新 CHANGELOG。
-- [ ] 运行 `bash tools/pack.sh`，上传 `dist/takeout-batch-downloader-<版本>.zip`（**添加新内容**）。
+- [ ] 运行 `bash tools/pack.sh`，上传 `dist/google-photos-batch-downloader-<版本>.zip`（**添加新内容**）。
 
 ### 商品详情
 - [ ] 详细说明、类别、语言：从 [`LISTING.md`](LISTING.md) 复制。名称和简介会自动读取 zip 里的 `_locales`。
@@ -30,14 +30,14 @@
 - [ ] 128×128 图标：`extension/icons/icon128.png`。
 - [ ] 截图：英文用 `assets/en/1…5`，中文用 `assets/zh/1…5`。
 - [ ] 小宣传图：`assets/<语言>/promo-small-440x280.png`；大幅宣传图（可选）：`promo-marquee-1400x560.png`。
-- [ ] 首页网址：`https://github.com/beepony/takeout-batch-downloader`
-- [ ] 支持网址：`https://github.com/beepony/takeout-batch-downloader/issues`
+- [ ] 首页网址：`https://github.com/beepony/google-photos-batch-downloader`
+- [ ] 支持网址：`https://github.com/beepony/google-photos-batch-downloader/issues`
 
 ### 隐私权规范
 - [ ] 从 [`PRIVACY_PRACTICES.md`](PRIVACY_PRACTICES.md) 粘贴单一用途说明和每个权限的理由。
 - [ ] 是否使用远程代码：**否**。
 - [ ] 数据使用：只勾选 **网站内容**，再勾选下面三项承诺。
-- [ ] 隐私权政策网址：`https://github.com/beepony/takeout-batch-downloader/blob/main/docs/PRIVACY.md`
+- [ ] 隐私权政策网址：`https://github.com/beepony/google-photos-batch-downloader/blob/main/docs/PRIVACY.md`
 
 ### 分发
 - [ ] 免费、所有地区、**公开**（想先小范围试用可以选**不公开列出**）。
@@ -52,5 +52,5 @@
   > Requires a Google Takeout export ready to download (takeout.google.com → Manage exports). Open the
   > export's download page; a "Download all N parts" panel appears at the bottom right. Click it and watch
   > progress in the toolbar popup. The repo includes an end-to-end test with a local mock of the page:
-  > https://github.com/beepony/takeout-batch-downloader#development
+  > https://github.com/beepony/google-photos-batch-downloader#development
 - 说明要实事求是，不要让人误以为是 Google 官方出品；说明结尾的免责声明就是为此准备的。

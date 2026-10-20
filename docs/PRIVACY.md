@@ -2,7 +2,7 @@
 
 [中文](PRIVACY.zh-CN.md)
 
-Takeout Batch Downloader runs entirely inside your browser.
+Google Photos Batch Downloader runs entirely inside your browser.
 
 - **No servers.** The extension has no backend and makes no network requests of its own. Downloads go directly
   from Google to your computer through Chrome's normal download manager.

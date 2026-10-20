@@ -263,7 +263,7 @@ export function buildVerifyScript(job) {
   const prefix = parts.map((p) => partFromFilename(p.filename)).find(Boolean)?.prefix || 'takeout-';
   const entries = parts.map((p) => `  [${p.part}]=${shQuote(p.filename || '')}`);
   return `#!/bin/bash
-# Takeout Batch Downloader - verify script for job ${job.jobId}
+# Google Photos Batch Downloader - verify script for job ${job.jobId}
 # Run: bash verify-takeout.sh
 cd "$(dirname "$0")" || exit 1
 TOTAL=${job.totalParts}

@@ -12,7 +12,7 @@ const img = (p) => 'file://' + join(ROOT, p);
 
 const T = {
   en: {
-    name: 'Takeout Batch Downloader',
+    name: 'Google Photos Batch Downloader',
     tag: 'Every Google Takeout part. One click.',
     s1: ['One click, every part', 'A “Download all” button appears on your Takeout page. No more clicking every link by hand.'],
     s2: ['Live progress for every part', 'Queue, concurrency, speed and time left at a glance. Close the tab — it keeps going.'],
@@ -25,7 +25,7 @@ const T = {
     small: 'Download every Takeout part in one click',
   },
   zh: {
-    name: 'Takeout 批量下载器',
+    name: 'Google Photos 批量下载',
     tag: 'Google Takeout 所有分卷，一键下载。',
     s1: ['一键下载全部分卷', 'Takeout 页面右下角出现“一键下载全部”按钮，不用再一个个点 166 次。'],
     s2: ['进度一目了然', '排队、并发、速度、剩余时间实时显示。关掉页面也会继续下载。'],

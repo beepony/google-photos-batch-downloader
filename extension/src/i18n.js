@@ -4,7 +4,7 @@
 
 export const MESSAGES = {
   zh: {
-    appName: 'Takeout 批量下载',
+    appName: 'Google Photos 批量下载',
     tagline: '一键排队 · 断点续传 · 完整校验',
     settings: '设置',
     secDownload: '下载',
@@ -129,7 +129,7 @@ export const MESSAGES = {
     dur_s: '{s} 秒',
   },
   en: {
-    appName: 'Takeout Batch Downloader',
+    appName: 'Google Photos Batch Downloader',
     tagline: 'One click · Auto resume · Verified',
     settings: 'Settings',
     secDownload: 'Downloads',
