@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.1 — 2026-10-20
+
+- Fix: a part that contains a single very large file (for example a long video) is served by Google as that file
+  (`…-078.mp4`) instead of `takeout-…-078.zip`. The extension mistook it for a sign-in page, cancelled it and
+  asked to verify again; each cancelled try used up one of Google's **5 downloads per part**. Such parts now
+  download normally. Sign-in is detected only from a web page (`text/html`) or a redirect to `accounts.google.com`.
+- When Google says a part reached its download limit, that part is marked failed with a clear message and is
+  never retried ("Retry failed" skips it). Retries per part are capped at 3 to protect the quota.
+- `verify-takeout.sh` checks non-zip parts by size and accepts extra folders:
+  `bash verify-takeout.sh /path/to/moved/parts`.
+
 ## 0.5.0 — 2026-10-20
 
 - Renamed to **Google Photos Batch Downloader** (中文：**Google Photos 批量下载**). The GitHub repository moved to

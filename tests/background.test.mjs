@@ -54,9 +54,9 @@ function makeChrome() {
         const item = {
           id,
           url,
-          finalUrl: url,
+          finalUrl: b.finalUrl || url,
           mime: b.mime,
-          filename: b.mime === 'text/html' ? '/dl/download.html' : `/dl/takeout-20261018T062654Z-1-${String(part).padStart(3, '0')}.zip`,
+          filename: b.filename || (b.mime === 'text/html' ? '/dl/download.html' : `/dl/takeout-20261018T062654Z-1-${String(part).padStart(3, '0')}.zip`),
           state: 'in_progress',
           bytesReceived: 0,
           totalBytes: GB2,
@@ -476,4 +476,54 @@ test('keep-screen-on can be turned off (system sleep only)', async () => {
   await send({ type: 'start', jobId: JOB });
   await settle();
   assert.equal(fake.awakeLevel, 'system');
+});
+
+test('a part served as a single video (not a zip) downloads instead of being treated as sign-in', async () => {
+  const { fake, send } = await boot();
+  fake.behavior = (url) => {
+    const i = new URL(url).searchParams.get('i');
+    if (i !== '1') return { mime: 'application/zip' };
+    return {
+      mime: 'application/octet-stream',
+      filename: '/dl/Movie.1280.www.example.com-002.mp4',
+      finalUrl: `https://takeout-download.usercontent.google.com/download/Movie-002.mp4?j=${JOB}&i=1`,
+    };
+  };
+  await send(scanMsg(2));
+  await send({ type: 'settings', settings: { concurrency: 2, burstSize: 0 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.notEqual(job.status, 'needs_auth');
+  const video = [...fake.items.values()].find((i) => /\.mp4$/.test(i.filename));
+  assert.ok(video, 'video download kept');
+  assert.match(video.filename, /Google Takeout\/Movie/);
+  for (const i of [...fake.items.values()]) await finish(fake, i.id);
+  job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.summary.done, 2);
+  assert.equal(fake.clicks, 2, 'each part clicked exactly once');
+});
+
+test('Google download-limit message stops that part without retrying', async () => {
+  const { fake, send } = await boot();
+  fake.tabs.sendMessage = async () => ({ ok: true }); // click shows a dialog, no download
+  await send(scanMsg(2));
+  await send({ type: 'settings', settings: { concurrency: 1, burstSize: 0 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const msg = scanMsg(2);
+  msg.pageText = '同一个文件最多只能尝试下载 5 次，请创建新的导出请求';
+  await send(msg);
+  await settle();
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  const p1 = job.parts.find((p) => p.part === 1);
+  assert.equal(p1.status, 'failed');
+  assert.match(fake.lastNotice.title, /Part 1/);
+});
+
+test('retries are capped at 3 even if an older version saved 6', async () => {
+  const { fake, send } = await boot();
+  fake.store.settings = { maxAttempts: 6 };
+  const st = (await send({ type: 'getState' })).data;
+  assert.equal(st.settings.maxAttempts, 3);
 });

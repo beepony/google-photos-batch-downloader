@@ -94,6 +94,36 @@ export function isArchiveName(name) {
   return Boolean(partFromFilename(name));
 }
 
+function hostOf(u) {
+  try {
+    return new URL(u).hostname;
+  } catch {
+    return '';
+  }
+}
+
+// Google's sign-in / re-verification answer: a web page instead of a file.
+export function isAuthResponse(item) {
+  if (/text\/html/i.test(item.mime || '')) return true;
+  if (/(^|\.)accounts\.google\.com$/.test(hostOf(item.finalUrl))) return true;
+  // Name already known and it is a saved web page that did not come from the file host.
+  return /\.html?$/i.test(item.filename || '') && hostOf(item.finalUrl) !== 'takeout-download.usercontent.google.com';
+}
+
+// A real part. Usually takeout-…-NNN.zip, but a part holding one huge file (e.g. a long video) is served
+// as that file itself ("Movie-078.mp4", application/octet-stream), so the file host counts too.
+export function isPartFile(item) {
+  if (isAuthResponse(item)) return false;
+  return isArchiveName(item.filename) || hostOf(item.finalUrl) === 'takeout-download.usercontent.google.com';
+}
+
+// Google allows each part to be downloaded only a few times (5) before a new export is needed.
+export function isDownloadLimitText(text) {
+  return /(?:最多|至多)[^。\n]{0,20}(?:\d+|五)\s*次|下载次数[^。\n]{0,10}(?:上限|过多|已用完)|(?:maximum|max\.?) (?:of )?\d+ times|too many (?:times|download attempts)|download(?:ed)? (?:limit|this file .{0,20}times)/i.test(
+    String(text || ''),
+  );
+}
+
 export function totalFromLabel(label) {
   const m = String(label || '').match(/共\s*(\d+)\s*(?:个)?部分|of\s+(\d+)/i);
   return m ? Number(m[1] || m[2]) : 0;
@@ -262,32 +292,55 @@ export function buildVerifyScript(job) {
   const parts = Object.values(job.parts).sort((a, b) => a.part - b.part);
   const prefix = parts.map((p) => partFromFilename(p.filename)).find(Boolean)?.prefix || 'takeout-';
   const entries = parts.map((p) => `  [${p.part}]=${shQuote(p.filename || '')}`);
+  const sizes = parts.map((p) => `  [${p.part}]=${Number(p.fileSize) || 0}`);
   return `#!/bin/bash
 # Google Photos Batch Downloader - verify script for job ${job.jobId}
-# Run: bash verify-takeout.sh
+# Run: bash verify-takeout.sh [other folders where you moved some parts...]
 cd "$(dirname "$0")" || exit 1
 TOTAL=${job.totalParts}
 PREFIX=${shQuote(prefix)}
+DIRS=("." "$@")
 declare -a KNOWN=(
 ${entries.join('\n')}
+)
+declare -a SIZE=(
+${sizes.join('\n')}
 )
 ok=0; bad=0; missing=0
 report="verify-report-$(date +%Y%m%d-%H%M%S).txt"
 : > "$report"
+find_part() {
+  local n="$1" known="$2" base num d f
+  if [ -n "$known" ] && [ -f "$known" ]; then echo "$known"; return; fi
+  base="\${known##*/}"; num=$(printf '%03d' "$n")
+  for d in "\${DIRS[@]}"; do
+    if [ -n "$base" ] && [ -f "$d/$base" ]; then echo "$d/$base"; return; fi
+    f=$(ls -1 "$d/\${PREFIX}\${num}.zip" "$d"/takeout-*-"\${num}".zip 2>/dev/null | head -1)
+    if [ -n "$f" ]; then echo "$f"; return; fi
+  done
+}
 for n in $(seq 1 "$TOTAL"); do
-  f="\${KNOWN[$n]}"
-  if [ -z "$f" ] || [ ! -f "$f" ]; then
-    num=$(printf '%03d' "$n")
-    f=$(ls -1 "\${PREFIX}\${num}.zip" takeout-*-"\${num}".zip 2>/dev/null | head -1)
-  fi
+  f=$(find_part "$n" "\${KNOWN[$n]}")
   if [ -z "$f" ] || [ ! -f "$f" ]; then
     echo "MISSING part $n" | tee -a "$report"; missing=$((missing+1)); continue
   fi
-  if unzip -tq "$f" >/dev/null 2>&1; then
-    echo "OK      part $n  $f" | tee -a "$report"; ok=$((ok+1))
-  else
-    echo "BAD     part $n  $f" | tee -a "$report"; bad=$((bad+1))
-  fi
+  case "$f" in
+    *.zip|*.ZIP)
+      if unzip -tq "$f" >/dev/null 2>&1; then
+        echo "OK      part $n  $f" | tee -a "$report"; ok=$((ok+1))
+      else
+        echo "BAD     part $n  $f" | tee -a "$report"; bad=$((bad+1))
+      fi ;;
+    *)
+      # Single-file part (e.g. a large video): check the size Chrome recorded.
+      got=$(wc -c < "$f" | tr -d ' ')
+      want="\${SIZE[$n]:-0}"
+      if [ "$got" -gt 0 ] && { [ "$want" -eq 0 ] || [ "$got" -eq "$want" ]; }; then
+        echo "OK      part $n  $f (file, $got bytes)" | tee -a "$report"; ok=$((ok+1))
+      else
+        echo "BAD     part $n  $f (file, $got of $want bytes)" | tee -a "$report"; bad=$((bad+1))
+      fi ;;
+  esac
 done
 echo "----" | tee -a "$report"
 echo "total=$TOTAL ok=$ok bad=$bad missing=$missing" | tee -a "$report"

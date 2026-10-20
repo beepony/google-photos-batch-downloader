@@ -8,6 +8,9 @@ import {
   classifyInterrupt,
   formatBytes,
   isArchiveName,
+  isAuthResponse,
+  isDownloadLimitText,
+  isPartFile,
   parsePartLink,
   partFromFilename,
   planNext,
@@ -23,7 +26,7 @@ const DEFAULTS = {
   keepAwake: true,
   keepScreenOn: true,
   notify: true,
-  maxAttempts: 6,
+  maxAttempts: 3,
   windowEnabled: false,
   windowStart: '00:00',
   windowEnd: '08:00',
@@ -59,6 +62,8 @@ async function load() {
     dl: raw.dl || {},
     aux: raw.aux || {},
   };
+  // Google allows each part only ~5 download attempts, so never spend more than 3 on retries.
+  state.settings.maxAttempts = Math.min(Number(state.settings.maxAttempts) || 3, 3);
   return state;
 }
 
@@ -184,6 +189,16 @@ async function upsertFromScan(scan) {
     }
   }
   await adoptHistory(job);
+  // Google shows "this file can be downloaded at most 5 times" instead of starting the download.
+  // Retrying cannot help, so stop that part with a clear message.
+  if (isDownloadLimitText(scan.pageText)) {
+    for (const p of Object.values(job.parts)) {
+      if (p.status !== 'starting' || p.downloadId) continue;
+      p.status = 'failed';
+      p.error = M('e_limit', { n: p.part });
+      notify(`limit-${job.jobId}-${p.part}`, 'nt_limitTitle', 'e_limit', { n: p.part });
+    }
+  }
   if (job.status === 'needs_auth') {
     job.status = 'running';
     job.notice = M('n_reauthDetected');
@@ -200,7 +215,7 @@ async function upsertFromScan(scan) {
 async function adoptHistory(job) {
   let items = [];
   try {
-    items = await chrome.downloads.search({ filenameRegex: 'takeout-[^/\\\\]*\\.(zip|tgz|tar\\.gz)$', limit: 0 });
+    items = await chrome.downloads.search({ limit: 0 });
   } catch {
     items = [];
   }
@@ -215,7 +230,7 @@ async function adoptHistory(job) {
     if (p.status === 'done') continue;
     // Chrome's history proves the part finished even if the user later moved the file elsewhere
     // (exists === false); the verify script is the final check.
-    if (item.state === 'complete' && isArchiveName(item.filename) && sizeLooksRight(item.fileSize || item.totalBytes, p.sizeBytes)) {
+    if (item.state === 'complete' && isPartFile(item) && sizeLooksRight(item.fileSize || item.totalBytes, p.sizeBytes)) {
       markDone(job, p, item, false);
     } else if (item.state === 'in_progress' && !ACTIVE.has(p.status)) {
       p.status = 'downloading';
@@ -483,8 +498,10 @@ function routeFilename(item, suggest) {
   if (!st || st.aux[item.id]) return suggest();
   const hit = jobForItem(item);
   if (!hit?.job) return suggest();
-  const looksHtml = /text\/html/i.test(item.mime || '') || !isArchiveName(item.filename);
-  if (looksHtml) {
+  // Only a web page means "sign in again". Parts are not always zips: a part holding one huge file
+  // (e.g. a movie) is served as that file itself, and must not be cancelled - every cancelled try
+  // uses up one of Google's 5 downloads for that part.
+  if (isAuthResponse(item)) {
     suggest();
     // Google answered with a sign-in / re-verification page instead of the archive.
     authCancelled.add(item.id);
@@ -576,7 +593,7 @@ async function onChanged(delta) {
   if (delta.state?.current === 'complete') {
     const [item] = await chrome.downloads.search({ id: delta.id });
     delete state.dl[delta.id];
-    if (item && isArchiveName(item.filename) && sizeLooksRight(item.fileSize || item.bytesReceived, p.sizeBytes)) {
+    if (item && isPartFile(item) && sizeLooksRight(item.fileSize || item.bytesReceived, p.sizeBytes)) {
       markDone(job, p, item);
     } else {
       scheduleRetry(job, p, M('e_size', { got: formatBytes(item?.fileSize || 0), want: formatBytes(p.sizeBytes) }));
@@ -706,6 +723,8 @@ const handlers = {
     const job = state.jobs[jobId];
     if (!job) return null;
     for (const p of Object.values(job.parts)) {
+      // Parts that hit Google's download limit would only fail again (and nothing is left to spend).
+      if (p.error?.k === 'e_limit') continue;
       if (p.status === 'failed' || p.status === 'retrying') {
         p.status = 'pending';
         p.attempts = 0;

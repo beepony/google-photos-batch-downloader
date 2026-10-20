@@ -9,6 +9,9 @@ import {
   buildManifestCsv,
   buildPartUrl,
   buildVerifyScript,
+  isAuthResponse,
+  isDownloadLimitText,
+  isPartFile,
   classifyInterrupt,
   parseExpiry,
   parsePartLink,
@@ -137,4 +140,40 @@ test('verify script finds good, bad and missing parts with macOS bash 3.2', () =
   assert.match(out, /MISSING part 3/);
   assert.match(out, /total=3 ok=1 bad=1 missing=1/);
   assert.ok(readFileSync(join(dir, 'verify-takeout.sh'), 'utf8').startsWith('#!/bin/bash'));
+});
+
+test('auth page vs. real part detection', () => {
+  const host = 'https://takeout-download.usercontent.google.com/download/x?j=J&i=77';
+  assert.equal(isAuthResponse({ mime: 'text/html', filename: '' }), true);
+  assert.equal(isAuthResponse({ mime: '', finalUrl: 'https://accounts.google.com/v3/signin' }), true);
+  assert.equal(isAuthResponse({ mime: 'application/octet-stream', filename: '/a/Movie-078.mp4', finalUrl: host }), false);
+  assert.equal(isPartFile({ mime: 'application/octet-stream', filename: '/a/Movie-078.mp4', finalUrl: host }), true);
+  assert.equal(isPartFile({ mime: 'application/zip', filename: '/a/takeout-1-001.zip', finalUrl: '' }), true);
+  assert.equal(isPartFile({ mime: 'text/html', filename: '/a/download.html', finalUrl: host }), false);
+});
+
+test('download limit text (zh/en)', () => {
+  assert.equal(isDownloadLimitText('同一个文件最多只能尝试下载 5 次'), true);
+  assert.equal(isDownloadLimitText('You can only download this file a maximum of 5 times'), true);
+  assert.equal(isDownloadLimitText('下载第 5 部分（共 166 部分）'), false);
+});
+
+test('verify script checks non-zip parts by size and looks in extra folders', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'vfy2-'));
+  const other = mkdtempSync(join(tmpdir(), 'vfy2o-'));
+  execFileSync('/bin/bash', ['-c', `cd ${other} && echo hi > a.txt && zip -q takeout-20261018T062654Z-1-001.zip a.txt`]);
+  writeFileSync(join(dir, 'Movie-002.mp4'), 'x'.repeat(10));
+  const job = {
+    jobId: JOB,
+    totalParts: 2,
+    parts: {
+      1: { part: 1, status: 'done', filename: '/gone/takeout-20261018T062654Z-1-001.zip' },
+      2: { part: 2, status: 'done', filename: '/gone/Movie-002.mp4', fileSize: 10 },
+    },
+  };
+  writeFileSync(join(dir, 'verify-takeout.sh'), buildVerifyScript(job));
+  const out = execFileSync('/bin/bash', [join(dir, 'verify-takeout.sh'), other], { encoding: 'utf8' });
+  assert.match(out, /OK +part 1/);
+  assert.match(out, /OK +part 2 .*file, 10 bytes/);
+  assert.match(out, /ALL GOOD/);
 });

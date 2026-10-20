@@ -44,10 +44,17 @@
     });
   }
 
+  const core = import(chrome.runtime.getURL('src/core.js'));
+  let limitShown = false;
+
   async function scan() {
     const records = collect();
     if (!records.length) return;
-    const key = records.map((r) => r.href).join('|');
+    let key = records.map((r) => r.href).join('|');
+    // Google's "downloaded too many times" dialog: report it so that part stops retrying.
+    const limit = (await core).isDownloadLimitText(document.body?.innerText || '');
+    if (limit && !limitShown) key += '|limit';
+    limitShown = limit;
     if (key === lastKey && jobId) return refresh();
     lastKey = key;
     const res = await send({
