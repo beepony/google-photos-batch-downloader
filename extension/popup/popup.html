@@ -53,6 +53,10 @@
         <span class="row-text"><span class="row-label" data-i18n="concurrency"></span><span class="row-sub" data-i18n="concurrencySub"></span></span>
         <select id="s-concurrency"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select>
       </label>
+      <label class="row">
+        <span class="row-text"><span class="row-label" data-i18n="burstSize"></span><span class="row-sub" data-i18n="burstSub"></span></span>
+        <select id="s-burst"><option value="0" data-i18n="burstOff"></option><option>4</option><option>6</option><option>8</option></select>
+      </label>
       <div class="row stack">
         <label class="row-text" for="s-subfolder"><span class="row-label" data-i18n="saveFolder"></span><span class="row-sub" data-i18n="saveFolderSub"></span></label>
         <div class="inline">
@@ -93,6 +97,10 @@
         <input id="s-notify" class="switch" type="checkbox" role="switch" />
       </label>
       <label class="row">
+        <span class="row-text"><span class="row-label" data-i18n="authSound"></span></span>
+        <input id="s-sound" class="switch" type="checkbox" role="switch" />
+      </label>
+      <label class="row">
         <span class="row-text"><span class="row-label" data-i18n="language"></span></span>
         <select id="s-language"><option value="auto" data-i18n="langAuto"></option><option value="zh">中文</option><option value="en">English</option></select>
       </label>
@@ -124,7 +132,8 @@
         <div><dt data-i18n="statEta"></dt><dd class="st-eta"></dd></div>
       </dl>
 
-      <div class="alert" role="status" hidden><svg><use href="#i-alert"/></svg><p class="notice"></p></div>
+      <div class="alert" role="status" hidden><svg><use href="#i-alert"/></svg><div class="alert-body"><p class="notice"></p><p class="tip" hidden><span data-i18n="passkeyTip"></span> <a href="https://myaccount.google.com/signinoptions/passkeys" target="_blank" rel="noopener" data-i18n="passkeyLink"></a></p></div></div>
+      <p class="auth-hint" hidden><svg><use href="#i-info"/></svg><span></span></p>
 
       <div class="actions">
         <button class="btn filled act-main"></button>

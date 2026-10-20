@@ -15,4 +15,5 @@ Takeout 批量下载器完全在你的浏览器里运行。
   - `alarms`：下载期间每 30 秒检查一次队列。
   - `notifications`：下载完成或需要你处理时发送通知。
   - `power`：下载期间防止电脑休眠（可在设置里关闭）。
+  - `offscreen`：需要验证时播放一声提示音（可在设置里关闭）。
   - 访问 `https://takeout.google.com/*`：在 Takeout 页面上找到分卷下载链接。

@@ -39,11 +39,15 @@ Hover over a square to see its file name or error.
 
 ## 4. When Google asks you to sign in again
 
-Takeout often asks you to verify your identity again during long downloads. When that happens:
+Google only lets a *new* part start for roughly 20 minutes after you verify; after that the next part needs a fresh check. This is Google's security rule, not an idle timeout, so keeping the page open or refreshing it does not extend it. Parts that are already downloading are not affected and finish normally.
+
+The extension therefore **reduces the number of checks**: for about 17 minutes after each verification it starts up to N parts back-to-back (**Burst after verifying** in settings, default 6), then returns to the normal parallel count. The popup shows when the next check is expected.
+
+When a check is needed:
 
 - The queue pauses (parts already downloading keep going).
-- The Takeout tab opens and you get a notification. The toolbar icon shows **!**.
-- Verify with your password or passkey.
+- The Takeout tab is focused, a short chime plays and a notification stays on screen until you handle it (click it to jump to the tab). The toolbar icon shows **!**.
+- Verify with your password or passkey. Adding a [passkey](https://myaccount.google.com/signinoptions/passkeys) to your Google account makes each check a few seconds with Touch ID / Windows Hello.
 - As soon as the Takeout page reloads with the fresh verification, downloading continues on its own.
   If it doesn't, press **I've verified — continue** in the popup.
 
@@ -52,11 +56,13 @@ Takeout often asks you to verify your identity again during long downloads. When
 | Setting | What it does |
 |---|---|
 | **Download N at a time** | Parallel downloads. 3 is a good default; use 1–2 on slow connections. |
+| **Burst after verifying** | How many parts to start during the ~17 minutes after each verification (Off / 4 / 6 / 8, default 6). Higher = fewer checks, but bandwidth is shared. |
 | **Save to Downloads/…** | Subfolder inside Chrome's download location. Empty = directly in it. **Open download folder** opens it in Finder / Explorer. |
 | **Data cap per run** | Pause after this many GB. Press **Resume** to start the next round. 0 = no limit. |
 | **Only download between** | A daily time window, e.g. 00:00–08:00. Windows across midnight work. |
 | **Keep the computer awake** | Uses Chrome's power API so the machine doesn't sleep. The screen may still lock. |
 | **Notify me** | System notifications when everything finishes, a cap is reached or sign-in is needed. |
+| **Play a sound when verification is needed** | A short chime when Google asks you to verify. |
 | **Language** | Browser default, 中文 or English. Also switchable with the 中 / EN buttons. |
 
 ## 6. Verify the downloads

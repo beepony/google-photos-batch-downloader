@@ -45,7 +45,7 @@ their "Part N" text, and the URL is rebuilt from the job ID. A `MutationObserver
 
 Everything lives in `chrome.storage.local` so the service worker can be stopped at any time:
 
-- `settings`: concurrency, subfolder, data cap, time window, keep-awake, notifications, language.
+- `settings`: concurrency, burst size, subfolder, data cap, time window, keep-awake, notifications, sound, language.
 - `jobs[jobId]`: page URL (with the latest `rapt` re-auth token), expiry, `parts[n]` with status
   `pending | starting | downloading | retrying | failed | done`, attempts, bytes, file name, error.
 - `dl[downloadId]`: maps Chrome download IDs back to `{ jobId, part }`.
@@ -59,6 +59,12 @@ When the session needs re-verification, Google answers the part URL with an HTML
 filename hook sees a non-zip name or `text/html`, cancels and erases that download, returns the part to
 `pending`, sets the job to `needs_auth`, opens the Takeout tab and notifies. When the user verifies, Takeout
 reloads with a new `rapt` token; the next scan refreshes the part URLs and resumes the job automatically.
+
+The verification only lets new parts start for about 20 minutes (observed; in-flight downloads are unaffected).
+Each verification sets `job.authAt`; for `BURST_MS` (17 min) `effectiveConcurrency()` raises the limit from
+`concurrency` to `burstSize`, so more parts are started while the token is fresh. The snapshot exposes
+`nextAuthAt = authAt + 20 min` for the popup. On `needs_auth` the notification uses `requireInteraction`, clicking
+it focuses the tab, and `offscreen/chime.html` plays a WebAudio tone (service workers cannot play audio).
 
 ### Resume and retry
 

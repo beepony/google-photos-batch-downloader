@@ -45,6 +45,12 @@ Keeps the computer from going to sleep while a long download queue is running (e
 ```
 下载期间防止电脑休眠（导出经常有几百 GB），停止下载后立即释放。可在设置中关闭。
 
+**offscreen**
+```text
+Plays a short chime when Google requires the user to verify their identity before the next part can start, so an unattended download does not stall unnoticed. A service worker cannot play audio, so a tiny offscreen page with a generated tone is opened for about a second and closed. Can be turned off in settings.
+```
+需要重新验证身份时播放一声提示音，避免无人值守时下载停住却没人发现。后台脚本不能播放声音，所以短暂打开一个离屏页面生成提示音后立即关闭。可在设置中关闭。
+
 **Host permission: `https://takeout.google.com/*`**
 ```text
 Reads the Takeout download page the user opens to find the download link for each part, and shows the "Download all" panel on that page. No other site is accessed.

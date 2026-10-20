@@ -18,4 +18,5 @@ Takeout Batch Downloader runs entirely inside your browser.
   - `alarms`: check the queue every 30 seconds while downloading.
   - `notifications`: tell you when downloading finishes or needs your attention.
   - `power`: keep the computer awake while downloading (optional, can be turned off).
+  - `offscreen`: play a short chime when verification is needed (optional, can be turned off).
   - Host access to `https://takeout.google.com/*`: find the part links on the Takeout page.

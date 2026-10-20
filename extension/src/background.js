@@ -27,10 +27,17 @@ const DEFAULTS = {
   windowStart: '00:00',
   windowEnd: '08:00',
   language: 'auto',
+  burstSize: 6,
+  authSound: true,
 };
 const TICK_ALARM = 'takeout-tick';
 const STALL_MS = 5 * 60_000;
 const ICON = 'icons/icon128.png';
+// Google's re-verification for Takeout downloads lasts roughly 20 minutes (observed, not documented).
+// Downloads that already started keep going after it lapses; only new part starts need it.
+export const AUTH_TTL_MS = 20 * 60_000;
+// Start extra parts only while the verification is surely still valid.
+const BURST_MS = 17 * 60_000;
 
 let state = null;
 let chain = Promise.resolve();
@@ -67,11 +74,42 @@ function lang() {
   return resolveLang(state?.settings.language, chrome.i18n?.getUILanguage?.() || '');
 }
 
-function notify(id, titleKey, bodyKey, params = {}) {
+function notify(id, titleKey, bodyKey, params = {}, extra = {}) {
   const title = t(lang(), titleKey, params);
   const message = t(lang(), bodyKey, params);
   if (!state?.settings.notify || !chrome.notifications) return;
-  chrome.notifications.create(id, { type: 'basic', iconUrl: ICON, title, message, priority: 1 }, () => void chrome.runtime.lastError);
+  chrome.notifications.create(id, { type: 'basic', iconUrl: ICON, title, message, priority: 1, ...extra }, () => void chrome.runtime.lastError);
+}
+
+// A service worker cannot play audio, so a tiny offscreen page plays a chime and closes itself.
+async function chime() {
+  if (!state?.settings.authSound || !chrome.offscreen?.createDocument) return;
+  try {
+    if (await chrome.offscreen.hasDocument?.()) return;
+    await chrome.offscreen.createDocument({
+      url: 'offscreen/chime.html',
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Play a short chime when Google asks the user to verify their identity',
+    });
+    setTimeout(() => chrome.offscreen.closeDocument?.().catch(() => {}), 3000);
+  } catch (e) {
+    console.warn('[takeout] chime', e);
+  }
+}
+
+// Fresh verification: open a burst window and predict when Google will ask again.
+function markVerified(job, now = Date.now()) {
+  job.authAt = now;
+  job.authNeededAt = 0;
+  chrome.notifications?.clear?.(`auth-${job.jobId}`, () => void chrome.runtime.lastError);
+}
+
+// While a verification is fresh, start up to burstSize parts so each verification covers more parts.
+export function effectiveConcurrency(job, settings, now = Date.now()) {
+  const base = settings.concurrency || 3;
+  const burst = Number(settings.burstSize) || 0;
+  if (burst > base && job.authAt && now - job.authAt < BURST_MS) return burst;
+  return base;
 }
 
 function baseName(path) {
@@ -144,13 +182,14 @@ async function upsertFromScan(scan) {
     }
   }
   await adoptHistory(job);
-  const raptNow = job.rapt || '';
-  void raptNow;
-  void raptBefore;
   if (job.status === 'needs_auth') {
     job.status = 'running';
     job.notice = M('n_reauthDetected');
     job.resumedAt = Date.now();
+    markVerified(job);
+  } else if (job.status === 'running' && raptBefore && parsed.rapt && parsed.rapt !== raptBefore) {
+    // The user verified again on their own (the page now carries a new token).
+    markVerified(job);
   }
   return job;
 }
@@ -283,7 +322,11 @@ function requireAuth(job, reason) {
   }
   job.status = 'needs_auth';
   job.notice = reason;
-  notify(`auth-${job.jobId}`, 'nt_authTitle', 'nt_authBody');
+  job.authNeededAt = Date.now();
+  job.authAt = 0;
+  // Stays on screen until clicked/cleared, so it is not missed while the user is away.
+  notify(`auth-${job.jobId}`, 'nt_authTitle', 'nt_authBody', {}, { requireInteraction: true, priority: 2 });
+  void chime();
   void focusTakeoutTab(job, true);
 }
 
@@ -376,7 +419,8 @@ async function tick() {
     }
     // Start parts one at a time: a new click is only made after the previous one became a download.
     const waiting = Object.values(job.parts).some((p) => p.status === 'starting' && !p.downloadId);
-    const next = waiting ? [] : planNext(job, settings, now).slice(0, 1);
+    const limit = effectiveConcurrency(job, settings, now);
+    const next = waiting ? [] : planNext(job, { ...settings, concurrency: limit }, now).slice(0, 1);
     if (!next.length && !s.active && settings.dataBudgetGB && s.pending) {
       job.status = 'paused';
       job.notice = M('n_budget', { gb: settings.dataBudgetGB });
@@ -587,7 +631,9 @@ async function snapshot() {
         }
         return { ...p, paused: Boolean(item?.paused), totalBytesLive: item?.totalBytes || 0 };
       });
-      return { ...job, parts, speed, summary: summarize(job) };
+      const nextAuthAt = job.status === 'running' && job.authAt ? job.authAt + AUTH_TTL_MS : 0;
+      const bursting = job.status === 'running' && effectiveConcurrency(job, state.settings, now) > (state.settings.concurrency || 3);
+      return { ...job, parts, speed, summary: summarize(job), nextAuthAt, bursting };
     });
   return { settings: state.settings, jobs };
 }
@@ -632,6 +678,8 @@ const handlers = {
     job.status = 'running';
     job.notice = '';
     job.resumedAt = 0;
+    // Starting usually follows opening/verifying the page, so treat it as a fresh verification.
+    markVerified(job);
     for (const p of Object.values(job.parts)) {
       if (p.downloadId && ACTIVE.has(p.status)) await chrome.downloads.resume(p.downloadId).catch(() => {});
     }
@@ -705,6 +753,7 @@ const handlers = {
     state.settings = { ...state.settings, ...settings };
     state.settings.concurrency = Math.min(8, Math.max(1, Number(state.settings.concurrency) || 3));
     state.settings.dataBudgetGB = Math.max(0, Number(state.settings.dataBudgetGB) || 0);
+    state.settings.burstSize = Math.min(8, Math.max(0, Number(state.settings.burstSize) || 0));
     if (!['auto', 'zh', 'en'].includes(state.settings.language)) state.settings.language = 'auto';
     await save();
     await tick();
@@ -772,6 +821,14 @@ chrome.downloads.onDeterminingFilename.addListener(routeFilename);
 locked(load);
 chrome.downloads.onCreated.addListener((item) => locked(() => onCreated(item)));
 chrome.downloads.onChanged.addListener((delta) => locked(() => onChanged(delta)));
+chrome.notifications?.onClicked?.addListener((id) => {
+  if (!id.startsWith('auth-')) return;
+  locked(async () => {
+    await load();
+    const job = state.jobs[id.slice(5)];
+    if (job) await focusTakeoutTab(job, true);
+  });
+});
 chrome.alarms.onAlarm.addListener((a) => {
   if (a.name === TICK_ALARM) locked(async () => {
     await load();

@@ -35,7 +35,7 @@ This Chrome extension adds a **Download all** button to the Takeout page and tak
 | **Concurrency control** | Download 1–6 parts at a time; the rest wait in line. |
 | **Auto resume & retry** | Network drops resume where they stopped (HTTP Range). Server errors retry with exponential back-off. A part with no progress for 5 minutes is re-queued. |
 | **No duplicates** | Parts already downloaded in this browser, currently downloading, or clicked manually on the page are recognised and skipped. |
-| **Sign-in handling** | When Google asks you to verify it's you, the queue pauses, the Takeout tab opens and you get a notification. As soon as you verify, downloading continues on its own. |
+| **Sign-in handling** | Google asks you to re-verify about every 20 minutes before a new part can start. Right after each check the extension starts a burst of parts, so you verify far less often. When a check is due it focuses the Takeout tab, plays a chime, shows a sticky notification and tells you when the next one is expected; downloading resumes on its own. |
 | **Data cap** | Stop after *N* GB per run — handy on metered connections. |
 | **Download window** | Only download during set hours (e.g. overnight). |
 | **Keep awake** | Prevents the computer from sleeping while downloads run. |

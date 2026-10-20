@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1 — 2026-10-20
+
+- **Fewer sign-in checks.** Google asks to re-verify about every 20 minutes before it lets a *new* part start
+  (parts already downloading are not affected; this is enforced by Google and cannot be kept alive).
+  New setting **Burst after verifying** (default 6): for ~17 minutes after each verification the extension
+  starts up to that many parts back-to-back, then falls back to the normal parallel count. One verification now
+  covers several times more parts (中文：验证后集中启动).
+- Sign-in reminder: the notification now stays on screen until handled and clicking it focuses the Takeout tab;
+  optional chime (new `offscreen` permission, setting **Play a sound when verification is needed**).
+- The job card shows when the next verification is expected and a passkey tip while sign-in is needed.
+
 ## 0.4.0 — 2026-10-20
 
 - Redesigned popup following Chrome / Edge extension conventions: system font, compact app bar with icon

@@ -53,6 +53,8 @@ function bindSettings(s) {
   $('#s-awake').checked = s.keepAwake;
   $('#s-notify').checked = s.notify;
   $('#s-language').value = s.language || 'auto';
+  $('#s-burst').value = String(s.burstSize ?? 6);
+  $('#s-sound').checked = s.authSound !== false;
   const push = () =>
     send('settings', {
       settings: {
@@ -65,6 +67,8 @@ function bindSettings(s) {
         keepAwake: $('#s-awake').checked,
         notify: $('#s-notify').checked,
         language: $('#s-language').value,
+        burstSize: Number($('#s-burst').value),
+        authSound: $('#s-sound').checked,
       },
     });
   for (const el of $('#settings').querySelectorAll('input, select')) el.addEventListener('change', push);
@@ -140,6 +144,15 @@ function renderJob(job) {
   alert.hidden = !text;
   alert.classList.toggle('error', job.status === 'needs_auth' || /fail|error/i.test(job.notice?.k || ''));
   $('.notice', node).textContent = text;
+  $('.tip', node).hidden = job.status !== 'needs_auth';
+  const hint = $('.auth-hint', node);
+  const hintText = job.bursting
+    ? T('bursting')
+    : job.nextAuthAt > Date.now()
+      ? T('nextAuth', { time: new Date(job.nextAuthAt).toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', { hour: '2-digit', minute: '2-digit' }) })
+      : '';
+  hint.hidden = !hintText || job.status !== 'running';
+  $('span', hint).textContent = hintText;
 
   const grid = $('.grid', node);
   const parts = [...job.parts].sort((a, b) => a.part - b.part);

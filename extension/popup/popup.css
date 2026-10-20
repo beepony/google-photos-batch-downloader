@@ -160,6 +160,11 @@ main:empty { display: none; }
 .alert.error { background: var(--error-container); color: var(--error); }
 .alert svg { margin-top: 1px; }
 .notice { margin: 0; font-size: 12.5px; line-height: 1.45; }
+.alert-body { display: grid; gap: 6px; min-width: 0; }
+.tip { margin: 0; font-size: 12px; line-height: 1.45; color: var(--on-surface-2); }
+.tip a { color: inherit; font-weight: 600; }
+.auth-hint { display: flex; gap: 6px; align-items: center; margin: 0; color: var(--on-surface-2); font-size: 12px; }
+.auth-hint svg { width: 16px; height: 16px; flex: none; }
 
 .actions { display: flex; gap: 8px; }
 .actions .act-main { flex: 1; }

@@ -135,7 +135,7 @@ test('queues parts with concurrency, completes, and finishes job', async () => {
   const { fake, send } = await boot();
   let r = await send(scanMsg(5));
   assert.equal(r.data.summary.total, 5);
-  await send({ type: 'settings', settings: { concurrency: 2, subfolder: 'Google Takeout' } });
+  await send({ type: 'settings', settings: { concurrency: 2, burstSize: 0, subfolder: 'Google Takeout' } });
   await send({ type: 'start', jobId: JOB });
   await settle();
   let active = [...fake.items.values()].filter((i) => i.state === 'in_progress');
@@ -397,4 +397,73 @@ test('open download folder reveals a file in the save subfolder', async () => {
   fake.items.clear();
   await send({ type: 'openDownloadDir' });
   assert.equal(fake.shown, 'default');
+});
+
+test('burst: right after verifying, starts up to burstSize parts; afterwards falls back to concurrency', async () => {
+  const { fake, send } = await boot();
+  fake.offscreenCount = 0;
+  await send(scanMsg(10));
+  await send({ type: 'settings', settings: { concurrency: 2, burstSize: 6 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const active = () => [...fake.items.values()].filter((i) => i.state === 'in_progress');
+  assert.equal(active().length, 6, 'burst started 6 parts back-to-back');
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.ok(job.bursting);
+  assert.ok(job.nextAuthAt > Date.now() + 19 * 60_000, 'predicts next verification ~20 min out');
+
+  // 18 minutes later the burst window is over: finished slots refill only up to concurrency.
+  const realNow = Date.now;
+  Date.now = () => realNow() + 18 * 60_000;
+  try {
+    for (const item of active().slice(0, 5)) await finish(fake, item.id);
+    assert.equal(active().length, 2, 'back to normal concurrency');
+    job = (await send({ type: 'getState' })).data.jobs[0];
+    assert.equal(job.bursting, false);
+  } finally {
+    Date.now = realNow;
+  }
+});
+
+test('auth needed: sticky notification, chime, and burst again after re-verifying', async () => {
+  const { fake, send } = await boot();
+  let docs = 0;
+  fake.offscreen = { hasDocument: async () => false, createDocument: async () => { docs += 1; }, closeDocument: async () => {} };
+  fake.notifications.clear = () => {};
+  fake.behavior = () => ({ mime: 'text/html' });
+  await send(scanMsg(10));
+  await send({ type: 'settings', settings: { concurrency: 2, burstSize: 4, notify: true } });
+  const realNow = Date.now;
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  let job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'needs_auth');
+  assert.equal(fake.lastNotice.requireInteraction, true, 'notification stays until handled');
+  assert.equal(docs, 1, 'chime played');
+  assert.equal(job.nextAuthAt, 0);
+
+  fake.behavior = () => ({ mime: 'application/zip' });
+  Date.now = () => realNow() + 5 * 60_000;
+  try {
+    await send(scanMsg(10, { rapt: 'R2' }));
+    await settle();
+  } finally {
+    Date.now = realNow;
+  }
+  job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'running');
+  const zips = [...fake.items.values()].filter((i) => i.state === 'in_progress' && /\.zip$/.test(i.filename));
+  assert.equal(zips.length, 4, 'burst after re-verification');
+});
+
+test('no chime when the sound setting is off', async () => {
+  const { fake, send } = await boot();
+  let docs = 0;
+  fake.offscreen = { hasDocument: async () => false, createDocument: async () => { docs += 1; } };
+  fake.behavior = () => ({ mime: 'text/html' });
+  await send(scanMsg(2));
+  await send({ type: 'settings', settings: { authSound: false } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  assert.equal(docs, 0);
 });
