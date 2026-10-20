@@ -69,6 +69,9 @@ function bindSettings(s) {
     });
   for (const el of $('#settings').querySelectorAll('input, select')) el.addEventListener('change', push);
   $('#s-open-dir').addEventListener('click', () => send('openDownloadDir'));
+  const syncWindow = () => ($('#window-times').hidden = !$('#s-window').checked);
+  $('#s-window').addEventListener('change', syncWindow);
+  syncWindow();
 }
 
 function makeCard(jobId) {
@@ -116,11 +119,15 @@ function renderJob(job) {
       ? ` · ${T('expires', { date: expires.toLocaleDateString(lang === 'zh' ? 'zh-CN' : 'en-US') })}` +
         (daysLeft <= 2 ? T('expiresSoon', { d: Math.max(0, daysLeft) }) : '')
       : '');
-  const pill = $('.pill', node);
-  pill.className = `pill ${job.status}`;
-  pill.textContent = T(`status_${job.status}`);
-  $('.pct', node).textContent = pct;
-  $('.st-parts', node).textContent = `${s.done}/${job.totalParts}` + (s.active ? ` (+${s.active})` : '');
+  const chip = $('.chip', node);
+  chip.className = `chip ${job.status}`;
+  chip.textContent = T(`status_${job.status}`);
+  node.classList.toggle('is-running', job.status === 'running');
+  $('.pct', node).textContent = job.status === 'done' ? 100 : pct;
+  $('.st-parts', node).textContent =
+    T('partsProgress', { done: s.done, total: job.totalParts }) + (s.active ? ` · ${T('partsActive', { n: s.active })}` : '');
+  $('.parts-count', node).textContent = `${s.done}/${job.totalParts}`;
+  $('.track', node).setAttribute('aria-valuenow', String(pct));
   $('.st-bytes', node).textContent = formatBytes(s.doneBytes);
   $('.st-speed', node).textContent = job.speed ? `${formatBytes(job.speed)}/s` : '--';
   $('.st-eta', node).textContent = job.speed && s.sizesKnown ? formatDuration((s.totalBytes - s.doneBytes) / job.speed, lang) : '--';
@@ -128,10 +135,11 @@ function renderJob(job) {
   const byParts = s.done / Math.max(1, job.totalParts);
   $('.fill', node).style.width = `${job.status === 'done' ? 100 : Math.min(100, Math.max(byBytes, byParts) * 100)}%`;
 
-  const notice = $('.notice', node);
   const text = job.status === 'needs_auth' ? T('authBanner') : tm(lang, job.notice);
-  notice.hidden = !text;
-  notice.textContent = text;
+  const alert = $('.alert', node);
+  alert.hidden = !text;
+  alert.classList.toggle('error', job.status === 'needs_auth' || /fail|error/i.test(job.notice?.k || ''));
+  $('.notice', node).textContent = text;
 
   const grid = $('.grid', node);
   const parts = [...job.parts].sort((a, b) => a.part - b.part);
@@ -178,9 +186,25 @@ async function refresh() {
   for (const job of st.jobs) renderJob(job);
 }
 
-$('#gear').addEventListener('click', () => {
-  $('#settings').hidden = !$('#settings').hidden;
+// Two views, like most Chrome / Edge popups: the job list, and a settings page with a back button.
+function showSettings(on) {
+  $('#settings').hidden = !on;
+  $('#home').hidden = on;
+  $('#back').hidden = !on;
+  $('#gear').hidden = on;
+  $('#view-title').dataset.i18n = on ? 'settings' : 'appName';
+  $('#view-title').textContent = T(on ? 'settings' : 'appName');
+}
+$('#gear').addEventListener('click', () => showSettings(true));
+$('#back').addEventListener('click', () => showSettings(false));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('#settings').hidden) {
+    e.preventDefault();
+    showSettings(false);
+  }
 });
+$('#s-chrome-dl').addEventListener('click', () => chrome.tabs.create({ url: 'chrome://settings/downloads' }));
+$('#version').textContent = chrome.runtime.getManifest?.().version || '';
 for (const b of document.querySelectorAll('.lang-switch button')) {
   b.addEventListener('click', async () => {
     $('#s-language').value = b.dataset.lang;

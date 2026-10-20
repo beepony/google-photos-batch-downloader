@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.0 — 2026-10-20
+
+- Redesigned popup following Chrome / Edge extension conventions: system font, compact app bar with icon
+  buttons, Material-style cards, chips, switches and list menus, 8px spacing grid, 32px+ hit targets,
+  visible keyboard focus, light and dark themes, reduced-motion support.
+- Settings moved to their own page (back button / Esc) and grouped into Downloads, Schedule & power, General;
+  shortcut to Chrome's download-location settings; version shown at the bottom.
+- Job card: large percentage, single progress bar, three stats, status chip, alert banner; the part grid and
+  "More" actions are collapsible.
+- On-page panel restyled to match Google's Material look.
+
 ## 0.3.1 — 2026-10-20
 
 - Settings: new **Open download folder** button next to the save location (中文：打开下载目录).

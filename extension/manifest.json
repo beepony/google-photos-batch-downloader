@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "__MSG_extName__",
   "short_name": "__MSG_extShortName__",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "__MSG_extDescription__",
   "minimum_chrome_version": "120",
   "permissions": [
@@ -50,7 +50,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "src/i18n.js"
+        "src/i18n.js",
+        "icons/icon32.png"
       ],
       "matches": [
         "https://takeout.google.com/*"

@@ -82,34 +82,43 @@
     root.innerHTML = `
       <style>
         :host { all: initial; }
-        .bar { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; width: 320px;
-          font: 13px/1.45 "Avenir Next", "PingFang SC", "Hiragino Sans GB", sans-serif; color: #1f2a24;
-          background: linear-gradient(160deg, #fbf6ea 0%, #f1e6cf 100%); border: 1px solid #d9c9a3;
-          border-radius: 14px; box-shadow: 0 18px 40px -18px rgba(40, 30, 10, .45); padding: 14px 16px;
-          animation: rise .45s cubic-bezier(.2,.9,.3,1.2); }
-        @keyframes rise { from { transform: translateY(24px); opacity: 0 } to { transform: none; opacity: 1 } }
-        .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-        .title { font-weight: 700; letter-spacing: .02em; }
-        .x { background: none; border: 0; font-size: 16px; cursor: pointer; color: #7a6a48; }
-        .meta { color: #6b5d3e; margin: 6px 0 10px; }
-        .track { height: 8px; border-radius: 99px; background: #e4d6b4; overflow: hidden; }
-        .fill { height: 100%; width: 0; background: repeating-linear-gradient(-45deg, #0f766e 0 8px, #14917f 8px 16px);
-          transition: width .6s ease; }
-        .row { display: flex; gap: 8px; margin-top: 12px; }
-        button.main { flex: 1; border: 0; border-radius: 10px; padding: 9px 12px; cursor: pointer; font: inherit;
-          font-weight: 700; background: #0f766e; color: #fff8e8; }
-        button.main.pause { background: #8a5a12; }
-        button.ghost { border: 1px solid #c8b58a; background: transparent; border-radius: 10px; padding: 9px 10px;
-          cursor: pointer; font: inherit; color: #5b4c2c; }
-        .notice { margin-top: 8px; color: #b45309; font-weight: 600; }
+        .bar { --p: #0b6e66; --on-p: #fff; --pc: #d3efe9; --s: #fff; --s2: #eef2f1; --t: #1b1f1e; --t2: #5a6461;
+          --line: #e1e7e5; --warn: #b3261e; --warn-bg: #fce8e6;
+          position: fixed; right: 24px; bottom: 24px; z-index: 2147483647; width: 320px; box-sizing: border-box;
+          font: 13px/1.45 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+          color: var(--t); background: var(--s); border-radius: 16px; padding: 16px;
+          box-shadow: 0 1px 3px rgba(60, 64, 67, .3), 0 4px 12px 3px rgba(60, 64, 67, .15);
+          animation: rise .25s cubic-bezier(.2, .8, .2, 1); }
+        @keyframes rise { from { transform: translateY(12px); opacity: 0 } to { transform: none; opacity: 1 } }
+        @media (prefers-reduced-motion: reduce) { .bar { animation: none; } .fill { transition: none; } }
+        .head { display: flex; align-items: center; gap: 10px; }
+        .logo { width: 20px; height: 20px; border-radius: 5px; }
+        .title { flex: 1; font-weight: 600; font-size: 14px; }
+        .x { display: grid; place-items: center; width: 28px; height: 28px; margin: -4px -6px -4px 0; border: 0; border-radius: 50%;
+          background: none; font-size: 18px; line-height: 1; cursor: pointer; color: var(--t2); }
+        .x:hover { background: var(--s2); }
+        .meta { color: var(--t2); margin: 8px 0 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+        .track { height: 6px; border-radius: 99px; background: var(--s2); overflow: hidden; }
+        .fill { height: 100%; width: 0; border-radius: inherit; background: var(--p); transition: width .5s ease; }
+        .row { display: flex; gap: 8px; margin-top: 14px; }
+        button.main, button.ghost { height: 36px; border-radius: 99px; padding: 0 16px; cursor: pointer; font: inherit; font-weight: 600; }
+        button.main { flex: 1; border: 0; background: var(--p); color: var(--on-p); }
+        button.main:hover:not(:disabled) { box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+        button.main.pause { background: var(--s2); color: var(--t); }
+        button.main:disabled { background: var(--pc); color: var(--t); cursor: default; }
+        button.ghost { border: 1px solid var(--line); background: transparent; color: var(--p); }
+        button.ghost:hover { background: var(--s2); }
+        button:focus-visible { outline: 2px solid var(--p); outline-offset: 2px; }
+        .notice { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--warn-bg); color: var(--warn); font-size: 12px; }
       </style>
       <div class="bar" role="region">
-        <div class="head"><span class="title"></span><button class="x">×</button></div>
+        <div class="head"><img class="logo" alt="" /><span class="title"></span><button class="x" aria-label="close">×</button></div>
         <div class="meta"></div>
         <div class="track"><div class="fill"></div></div>
         <div class="notice" hidden></div>
         <div class="row"><button class="main"></button><button class="ghost open"></button></div>
       </div>`;
+    root.querySelector('.logo').src = chrome.runtime.getURL('icons/icon32.png');
     document.documentElement.appendChild(host);
     root.querySelector('.x').onclick = () => {
       host.remove();
@@ -136,6 +145,7 @@
     bar.querySelector('.bar').setAttribute('aria-label', T('appName'));
     bar.querySelector('.title').textContent = T('appName');
     bar.querySelector('.x').title = T('hide');
+    bar.querySelector('.x').setAttribute('aria-label', T('hide'));
     bar.querySelector('.open').textContent = T('details');
     const s = job.summary;
     const pct = job.totalParts ? Math.round((s.done / job.totalParts) * 100) : 0;
