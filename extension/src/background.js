@@ -725,6 +725,22 @@ const handlers = {
     else chrome.downloads.showDefaultFolder();
     return true;
   },
+  // Chrome can only reveal a downloaded file or open its default download folder, so reveal the newest
+  // file still present in our subfolder (which opens that folder) and fall back to the default folder.
+  async openDownloadDir() {
+    const folder = state.settings.subfolder.replace(/^[/\\]+|[/\\]+$/g, '');
+    let items = [];
+    try {
+      items = await chrome.downloads.search({ exists: true, state: 'complete', orderBy: ['-endTime'], limit: 200 });
+    } catch {
+      items = [];
+    }
+    const inFolder = (f) => folder && String(f || '').split(/[\\/]/).slice(-2, -1)[0] === folder.split(/[\\/]/).pop();
+    const hit = items.find((i) => inFolder(i.filename)) || items.find((i) => isArchiveName(i.filename));
+    if (hit) chrome.downloads.show(hit.id);
+    else chrome.downloads.showDefaultFolder();
+    return Boolean(hit);
+  },
   async openPopup() {
     try {
       await chrome.action.openPopup();

@@ -68,6 +68,7 @@ function bindSettings(s) {
       },
     });
   for (const el of $('#settings').querySelectorAll('input, select')) el.addEventListener('change', push);
+  $('#s-open-dir').addEventListener('click', () => send('openDownloadDir'));
 }
 
 function makeCard(jobId) {

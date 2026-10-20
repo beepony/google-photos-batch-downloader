@@ -52,7 +52,7 @@ Takeout often asks you to verify your identity again during long downloads. When
 | Setting | What it does |
 |---|---|
 | **Download N at a time** | Parallel downloads. 3 is a good default; use 1–2 on slow connections. |
-| **Save to Downloads/…** | Subfolder inside Chrome's download location. Empty = directly in it. |
+| **Save to Downloads/…** | Subfolder inside Chrome's download location. Empty = directly in it. **Open download folder** opens it in Finder / Explorer. |
 | **Data cap per run** | Pause after this many GB. Press **Resume** to start the next round. 0 = no limit. |
 | **Only download between** | A daily time window, e.g. 00:00–08:00. Windows across midnight work. |
 | **Keep the computer awake** | Uses Chrome's power API so the machine doesn't sleep. The screen may still lock. |

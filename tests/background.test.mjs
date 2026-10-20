@@ -386,3 +386,15 @@ test('no Takeout tab open: asks for the page instead of downloading directly', a
   assert.equal(job.notice.k, 'n_needPage');
   assert.match(fake.openedTab, /manage\/archive/);
 });
+
+test('open download folder reveals a file in the save subfolder', async () => {
+  const { fake, send } = await boot();
+  fake.items.set(5, { id: 5, url: 'x', state: 'complete', exists: true, filename: '/dl/Google Takeout/takeout-20261018T062654Z-1-005.zip', endTime: '2026-10-20' });
+  fake.downloads.show = (id) => (fake.shown = id);
+  fake.downloads.showDefaultFolder = () => (fake.shown = 'default');
+  await send({ type: 'openDownloadDir' });
+  assert.equal(fake.shown, 5);
+  fake.items.clear();
+  await send({ type: 'openDownloadDir' });
+  assert.equal(fake.shown, 'default');
+});

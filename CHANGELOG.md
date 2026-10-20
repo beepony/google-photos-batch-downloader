@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.1 — 2026-10-20
+
+- Settings: new **Open download folder** button next to the save location (中文：打开下载目录).
+
 ## 0.3.0 — 2026-10-18
 
 - Fix (root cause of the endless "verify your identity" prompt): Google only serves archives to requests that
