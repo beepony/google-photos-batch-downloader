@@ -21,6 +21,7 @@ const DEFAULTS = {
   subfolder: 'Google Takeout',
   dataBudgetGB: 0,
   keepAwake: true,
+  keepScreenOn: true,
   notify: true,
   maxAttempts: 6,
   windowEnabled: false,
@@ -91,7 +92,8 @@ async function chime() {
       reasons: ['AUDIO_PLAYBACK'],
       justification: 'Play a short chime when Google asks the user to verify their identity',
     });
-    setTimeout(() => chrome.offscreen.closeDocument?.().catch(() => {}), 3000);
+    const off = chrome.offscreen;
+    setTimeout(() => off?.closeDocument?.()?.catch?.(() => {}), 3000);
   } catch (e) {
     console.warn('[takeout] chime', e);
   }
@@ -443,7 +445,9 @@ async function tick() {
 
 async function updateChrome(running) {
   if (chrome.power) {
-    if (running && state.settings.keepAwake) chrome.power.requestKeepAwake('system');
+    // 'system' only stops idle sleep; the display still turns off and macOS/Windows lock the screen.
+    // 'display' keeps the screen on too, which also prevents the automatic lock.
+    if (running && state.settings.keepAwake) chrome.power.requestKeepAwake(state.settings.keepScreenOn ? 'display' : 'system');
     else chrome.power.releaseKeepAwake();
   }
   const jobs = Object.values(state.jobs);

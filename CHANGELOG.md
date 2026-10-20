@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2 — 2026-10-20
+
+- Fix: "Keep computer awake" only blocked system sleep, so the display still turned off and the OS locked the
+  screen. New sub-setting **Also keep the screen on** (default on) uses `chrome.power` level `display` while
+  downloading (中文：同时保持屏幕常亮，防止自动锁屏).
+
 ## 0.4.1 — 2026-10-20
 
 - **Fewer sign-in checks.** Google asks to re-verify about every 20 minutes before it lets a *new* part start

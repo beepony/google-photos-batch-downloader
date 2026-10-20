@@ -60,7 +60,8 @@ When a check is needed:
 | **Save to Downloads/…** | Subfolder inside Chrome's download location. Empty = directly in it. **Open download folder** opens it in Finder / Explorer. |
 | **Data cap per run** | Pause after this many GB. Press **Resume** to start the next round. 0 = no limit. |
 | **Only download between** | A daily time window, e.g. 00:00–08:00. Windows across midnight work. |
-| **Keep the computer awake** | Uses Chrome's power API so the machine doesn't sleep. The screen may still lock. |
+| **Keep the computer awake** | Uses Chrome's power API so the machine doesn't sleep. |
+| **Also keep the screen on** | On by default. The display stays on while downloading, so it doesn't turn off and auto-lock. When off, the computer stays awake but the screen may turn off and lock (downloads continue). |
 | **Notify me** | System notifications when everything finishes, a cap is reached or sign-in is needed. |
 | **Play a sound when verification is needed** | A short chime when Google asks you to verify. |
 | **Language** | Browser default, 中文 or English. Also switchable with the 中 / EN buttons. |

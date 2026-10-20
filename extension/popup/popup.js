@@ -51,6 +51,7 @@ function bindSettings(s) {
   $('#s-wstart').value = s.windowStart;
   $('#s-wend').value = s.windowEnd;
   $('#s-awake').checked = s.keepAwake;
+  $('#s-screen').checked = s.keepScreenOn !== false;
   $('#s-notify').checked = s.notify;
   $('#s-language').value = s.language || 'auto';
   $('#s-burst').value = String(s.burstSize ?? 6);
@@ -65,6 +66,7 @@ function bindSettings(s) {
         windowStart: $('#s-wstart').value || '00:00',
         windowEnd: $('#s-wend').value || '08:00',
         keepAwake: $('#s-awake').checked,
+        keepScreenOn: $('#s-screen').checked,
         notify: $('#s-notify').checked,
         language: $('#s-language').value,
         burstSize: Number($('#s-burst').value),
@@ -76,6 +78,9 @@ function bindSettings(s) {
   const syncWindow = () => ($('#window-times').hidden = !$('#s-window').checked);
   $('#s-window').addEventListener('change', syncWindow);
   syncWindow();
+  const syncAwake = () => ($('#screen-row').hidden = !$('#s-awake').checked);
+  $('#s-awake').addEventListener('change', syncAwake);
+  syncAwake();
 }
 
 function makeCard(jobId) {

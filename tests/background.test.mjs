@@ -25,7 +25,7 @@ function makeChrome() {
     },
     alarms: { create() {}, clear() {}, onAlarm: on('alarm') },
     action: { setBadgeText: async () => {}, setBadgeBackgroundColor: async () => {}, openPopup: async () => {} },
-    power: { requestKeepAwake() { fake.awake = true; }, releaseKeepAwake() { fake.awake = false; } },
+    power: { requestKeepAwake(level) { fake.awake = true; fake.awakeLevel = level; }, releaseKeepAwake() { fake.awake = false; } },
     notifications: { create: (id, opts) => (fake.lastNotice = opts) },
     // One open Takeout tab whose content script "clicks" the part button, which starts a download.
     tabsList: [{ id: 1, windowId: 1, url: `https://takeout.google.com/manage/archive/${JOB}` }],
@@ -142,6 +142,7 @@ test('queues parts with concurrency, completes, and finishes job', async () => {
   assert.equal(active.length, 2);
   assert.match(active[0].filename, /\/dl\/Google Takeout\/takeout-.*-001\.zip/);
   assert.equal(fake.awake, true);
+  assert.equal(fake.awakeLevel, 'display', 'keeps the screen on so it does not auto-lock');
 
   // finish everything one by one
   for (let guard = 0; guard < 10; guard += 1) {
@@ -466,4 +467,13 @@ test('no chime when the sound setting is off', async () => {
   await send({ type: 'start', jobId: JOB });
   await settle();
   assert.equal(docs, 0);
+});
+
+test('keep-screen-on can be turned off (system sleep only)', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(2));
+  await send({ type: 'settings', settings: { keepScreenOn: false } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  assert.equal(fake.awakeLevel, 'system');
 });
