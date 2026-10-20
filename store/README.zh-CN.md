@@ -9,7 +9,9 @@
 | [`LISTING.md`](LISTING.md) | 商店页面文案：名称、简介、详细说明、类别（中英文） |
 | [`PRIVACY_PRACTICES.md`](PRIVACY_PRACTICES.md) | **隐私权规范**页面要填的内容：单一用途、每个权限的理由、数据使用 |
 | [`assets/en/`](assets/en)、[`assets/zh/`](assets/zh) | 1280×800 截图 5 张、440×280 小宣传图、1400×560 大幅宣传图 |
-| [`../tools/store-assets.mjs`](../tools/store-assets.mjs) | 重新生成这些图片（`node tools/store-assets.mjs`，需要 Chrome） |
+| [`../tools/ui-shots.mjs`](../tools/ui-shots.mjs) | 用演示数据截取真实的弹窗和页面面板 → `docs/images`、`assets/src` |
+| [`../tools/store-assets.mjs`](../tools/store-assets.mjs) | 用这些截图生成商店图片（`node tools/store-assets.mjs`，需要 Chrome） |
+| [`../tools/store-kit.sh`](../tools/store-kit.sh) | 把上传 zip、图标、截图、宣传图和文案汇总到 `dist/store-kit-<版本>/` |
 | [`../tools/pack.sh`](../tools/pack.sh) | 打包上传用的 zip：`dist/google-photos-batch-downloader-<版本>.zip` |
 
 ## 上架步骤
@@ -20,6 +22,8 @@
 - [ ] **账号 → 联系邮箱**：填写并验证联系邮箱。
 
 ### 上传
+- [ ] 界面有改动时先更新图片：`node tools/ui-shots.mjs && node tools/store-assets.mjs`。
+- [ ] 运行 `bash tools/store-kit.sh`，要上传的东西都在 `dist/store-kit-<版本>/`。
 - [ ] `node --test tests/*.test.mjs` 全部通过。
 - [ ] 如果这个版本号上传过，先改 `extension/manifest.json` 里的 `version`，并更新 CHANGELOG。
 - [ ] 运行 `bash tools/pack.sh`，上传 `dist/google-photos-batch-downloader-<版本>.zip`（**添加新内容**）。

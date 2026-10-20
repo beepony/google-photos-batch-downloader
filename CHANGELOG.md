@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- README and Chrome Web Store images regenerated from the current UI (new name, 0.5 layout); README gains
+  sign-in and settings screenshots. New `tools/ui-shots.mjs` (real popup/panel with demo data) and
+  `tools/store-kit.sh` (everything to upload in one folder).
+
 ## 0.5.1 — 2026-10-20
 
 - Fix: a part that contains a single very large file (for example a long video) is served by Google as that file

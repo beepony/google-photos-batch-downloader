@@ -48,6 +48,14 @@
 | **手动修正** | 可以把已有的分卷标记为“已有”，或强制重新下载指定分卷。 |
 | **中英双语界面** | 默认跟随浏览器语言，也可一键切换。 |
 
+## 截图
+
+<p align="center">
+  <img src="docs/images/popup-auth-zh.png" width="380" alt="需要验证时自动暂停，验证完成后自动继续" />
+  &nbsp;
+  <img src="docs/images/settings-zh.png" width="380" alt="设置：同时下载数、验证后集中启动、保存文件夹、流量上限、定时下载、防止休眠" />
+</p>
+
 ## 安装
 
 目前还没有上架 Chrome 应用商店，请从源码安装：

@@ -51,6 +51,14 @@ It also works for any other Google Takeout export (Google Drive, Gmail, YouTube�
 | **Manual fixes** | Mark parts you already have, or force selected parts to download again. |
 | **Bilingual UI** | English and 简体中文, follows the browser language or switch with one click. |
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/images/popup-auth-en.png" width="380" alt="Sign-in needed: the queue pauses until you verify, then resumes automatically" />
+  &nbsp;
+  <img src="docs/images/settings-en.png" width="380" alt="Settings: parallel downloads, burst after verifying, save folder, data cap, download window, keep awake" />
+</p>
+
 ## Install
 
 The extension is not on the Chrome Web Store yet. Install it from source:

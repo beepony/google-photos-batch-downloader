@@ -9,7 +9,9 @@ Everything needed to publish **Google Photos Batch Downloader** on the Chrome We
 | [`LISTING.md`](LISTING.md) | Store listing text: name, summary, description, category (English + 简体中文) |
 | [`PRIVACY_PRACTICES.md`](PRIVACY_PRACTICES.md) | Answers for the **Privacy practices** tab: single purpose, permission justifications, data use |
 | [`assets/en/`](assets/en), [`assets/zh/`](assets/zh) | Screenshots 1280×800 (×5), small promo tile 440×280, marquee 1400×560 |
-| [`../tools/store-assets.mjs`](../tools/store-assets.mjs) | Regenerates the images (`node tools/store-assets.mjs`, needs Chrome) |
+| [`../tools/ui-shots.mjs`](../tools/ui-shots.mjs) | Screenshots of the real popup / page panel with demo data → `docs/images`, `assets/src` |
+| [`../tools/store-assets.mjs`](../tools/store-assets.mjs) | Builds the store images from those screenshots (`node tools/store-assets.mjs`, needs Chrome) |
+| [`../tools/store-kit.sh`](../tools/store-kit.sh) | Collects the upload zip, icon, screenshots, promo tiles and texts into `dist/store-kit-<version>/` |
 | [`../tools/pack.sh`](../tools/pack.sh) | Builds the upload zip `dist/google-photos-batch-downloader-<version>.zip` |
 
 ## Checklist
@@ -21,6 +23,8 @@ Everything needed to publish **Google Photos Batch Downloader** on the Chrome We
 - [ ] **Account → Contact email**: set and verify a contact email.
 
 ### Upload
+- [ ] Refresh images if the UI changed: `node tools/ui-shots.mjs && node tools/store-assets.mjs`.
+- [ ] `bash tools/store-kit.sh` → everything to upload is in `dist/store-kit-<version>/`.
 - [ ] `node --test tests/*.test.mjs` passes.
 - [ ] Bump `version` in `extension/manifest.json` if this version was uploaded before, and add a CHANGELOG entry.
 - [ ] `bash tools/pack.sh` → upload `dist/google-photos-batch-downloader-<version>.zip` (**Add new item**).
