@@ -247,7 +247,8 @@ export const ACTIVE = new Set(['starting', 'downloading']);
 // Choose which parts to start next. Pure so it can be tested.
 export function planNext(job, settings, now = Date.now()) {
   if (!job || job.status !== 'running') return [];
-  const parts = Object.values(job.parts).sort((a, b) => a.part - b.part);
+  // Parts the user asked to restart jump the queue.
+  const parts = Object.values(job.parts).sort((a, b) => Boolean(b.rush) - Boolean(a.rush) || a.part - b.part);
   const active = parts.filter((p) => ACTIVE.has(p.status));
   let slots = Math.max(0, (settings.concurrency || 3) - active.length);
   if (!slots) return [];

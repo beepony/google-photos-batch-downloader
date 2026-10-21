@@ -295,6 +295,7 @@ async function clickOnPage(job, p) {
 
 async function startPart(job, p) {
   p.status = 'starting';
+  p.rush = false;
   p.attempts = (p.attempts || 0) + 1;
   p.error = '';
   p.downloadId = null;
@@ -482,7 +483,7 @@ async function updateChrome(running) {
 
 // ---------- downloads events ----------
 
-const authCancelled = new Set();
+const ignoredDownloads = new Set();
 const pendingAuxNames = new Map(); // data: URL -> desired relative filename
 
 // Must call suggest() synchronously-ish and never wait on the queue lock: chrome.downloads.download()
@@ -504,7 +505,7 @@ function routeFilename(item, suggest) {
   if (isAuthResponse(item)) {
     suggest();
     // Google answered with a sign-in / re-verification page instead of the archive.
-    authCancelled.add(item.id);
+    ignoredDownloads.add(item.id);
     chrome.downloads.cancel(item.id).catch(() => {});
     chrome.downloads.erase({ id: item.id }).catch(() => {});
     locked(async () => {
@@ -543,7 +544,7 @@ function bindStarting(item) {
 
 async function onCreated(item) {
   await load();
-  if (authCancelled.has(item.id) || state.dl[item.id] || state.aux[item.id]) return;
+  if (ignoredDownloads.has(item.id) || state.dl[item.id] || state.aux[item.id]) return;
   const hit = jobForItem(item) || bindStarting(item);
   if (!hit?.job) return;
   // A part link clicked on the page: track it instead of downloading it again.
@@ -560,8 +561,8 @@ async function onCreated(item) {
 
 async function onChanged(delta) {
   await load();
-  if (authCancelled.has(delta.id)) {
-    if (delta.state?.current === 'interrupted' || delta.state?.current === 'complete') authCancelled.delete(delta.id);
+  if (ignoredDownloads.has(delta.id)) {
+    if (delta.state?.current === 'interrupted' || delta.state?.current === 'complete') ignoredDownloads.delete(delta.id);
     delete state.dl[delta.id];
     return;
   }
@@ -758,6 +759,38 @@ const handlers = {
       if (p && !ACTIVE.has(p.status)) Object.assign(p, { status: 'pending', attempts: 0, error: '' });
     }
     await save();
+    return true;
+  },
+  // Restart one part from the popup grid: drop whatever Chrome has for it and download it again next.
+  async restartPart({ jobId, part }) {
+    const job = state.jobs[jobId];
+    const p = job?.parts[part];
+    if (!p) return null;
+    if (p.downloadId && ACTIVE.has(p.status)) {
+      ignoredDownloads.add(p.downloadId);
+      delete state.dl[p.downloadId];
+      await chrome.downloads.cancel(p.downloadId).catch(() => {});
+    }
+    if (p.resumeId) {
+      ignoredDownloads.add(p.resumeId);
+      delete state.dl[p.resumeId];
+      await chrome.downloads.cancel(p.resumeId).catch(() => {});
+    }
+    Object.assign(p, {
+      status: 'pending',
+      attempts: 0,
+      error: '',
+      bytes: 0,
+      downloadId: null,
+      resumeId: null,
+      retryAt: 0,
+      rush: true,
+    });
+    if (job.status === 'done' || job.status === 'paused') {
+      job.status = 'running';
+      job.notice = '';
+    }
+    await tick();
     return true;
   },
   async removeJob({ jobId }) {

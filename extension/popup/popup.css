@@ -181,7 +181,8 @@ details[open] > summary .chev { transform: rotate(90deg); }
 }
 .parts-count { color: var(--on-surface-2); font-weight: 500; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(12px, 1fr)); gap: 3px; max-height: 136px; overflow: auto; padding: 2px 0; }
-.cell { aspect-ratio: 1; border-radius: 3px; background: var(--idle); position: relative; overflow: hidden; }
+.cell { aspect-ratio: 1; border-radius: 3px; background: var(--idle); position: relative; overflow: hidden; cursor: pointer; }
+.cell:hover { outline: 2px solid var(--on-surface-2); outline-offset: 0; }
 .cell.done { background: var(--done); }
 .cell.downloading::after, .cell.starting::after { content: ""; position: absolute; inset: 0; background: var(--active); transform-origin: bottom; transform: scaleY(var(--p, .15)); transition: transform .5s; }
 .cell.retrying { background: repeating-linear-gradient(45deg, var(--active) 0 2px, var(--idle) 2px 5px); }

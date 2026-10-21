@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Part squares in the popup: hover shows the part's file name (for example `takeout-20261018T062654Z-1-104.zip`)
+  and status; click asks for confirmation and downloads that part again. A running download of it is cancelled
+  first, and the part goes to the front of the queue. A finished job reopens if one of its parts is restarted.
 - README and Chrome Web Store images regenerated from the current UI (new name, 0.5 layout); README gains
   sign-in and settings screenshots. New `tools/ui-shots.mjs` (real popup/panel with demo data) and
   `tools/store-kit.sh` (everything to upload in one folder).

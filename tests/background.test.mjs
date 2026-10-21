@@ -527,3 +527,55 @@ test('retries are capped at 3 even if an older version saved 6', async () => {
   const st = (await send({ type: 'getState' })).data;
   assert.equal(st.settings.maxAttempts, 3);
 });
+
+test('clicking a part restarts it: cancels the running download and downloads it again first', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(3));
+  await send({ type: 'settings', settings: { concurrency: 1, burstSize: 0 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  const [first] = [...fake.items.values()];
+  await send({ type: 'restartPart', jobId: JOB, part: 1 });
+  await settle();
+  assert.equal(fake.items.get(first.id).state, 'interrupted', 'old download cancelled');
+  // Chrome reports the cancel; it must not mark the part as failed.
+  await fake.listeners.changed({ id: first.id, state: { current: 'interrupted' } });
+  await settle();
+  const part1 = [...fake.items.values()].filter((i) => /[?&]i=0(&|$)/.test(i.url));
+  assert.equal(part1.length, 2, 'part 1 downloaded again');
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  const p1 = job.parts.find((p) => p.part === 1);
+  assert.equal(p1.status, 'downloading');
+  assert.equal(p1.downloadId, part1[1].id);
+});
+
+test('a restarted finished part jumps the queue', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(3));
+  await send({ type: 'settings', settings: { concurrency: 1, burstSize: 0 } });
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  await finish(fake, [...fake.items.values()][0].id);
+  await send({ type: 'restartPart', jobId: JOB, part: 1 });
+  await settle();
+  // Part 2 holds the only slot; once it finishes, part 1 goes before part 3.
+  await finish(fake, [...fake.items.values()].find((i) => i.state === 'in_progress').id);
+  const active = [...fake.items.values()].filter((i) => i.state === 'in_progress');
+  const parts = active.map((i) => Number(new URL(i.url).searchParams.get('i')) + 1);
+  assert.ok(parts.includes(1), 'part 1 is downloading again before part 3');
+  assert.ok(!parts.includes(3));
+});
+
+test('restarting a part of a completed job reopens it', async () => {
+  const { fake, send } = await boot();
+  await send(scanMsg(1));
+  await send({ type: 'start', jobId: JOB });
+  await settle();
+  await finish(fake, [...fake.items.values()][0].id);
+  assert.equal((await send({ type: 'getState' })).data.jobs[0].status, 'done');
+  await send({ type: 'restartPart', jobId: JOB, part: 1 });
+  await settle();
+  const job = (await send({ type: 'getState' })).data.jobs[0];
+  assert.equal(job.status, 'running');
+  assert.equal(fake.items.size, 2);
+});

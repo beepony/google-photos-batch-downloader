@@ -19,6 +19,14 @@ let lang = resolveLang('auto', chrome.i18n?.getUILanguage?.());
 let appliedLang = '';
 const T = (k, p) => t(lang, k, p);
 
+// File name of a part: the real one once Chrome has it, otherwise derived from the job's file prefix.
+function partName(job, p) {
+  const own = String(p.filename || '').split(/[\\/]/).pop();
+  if (own) return own;
+  if (job.prefix) return `${job.prefix}${String(p.part).padStart(3, '0')}.zip`;
+  return T('partTitle', { n: p.part });
+}
+
 function applyStatic(root = document) {
   for (const el of root.querySelectorAll('[data-i18n]')) el.textContent = T(el.dataset.i18n);
   for (const el of root.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = T(el.dataset.i18nPlaceholder);
@@ -102,6 +110,15 @@ function makeCard(jobId) {
   act('.act-page', 'openPage');
   act('.act-mark', 'markDone', () => ({ ranges: $('.range-input', node).value }));
   act('.act-redo', 'redownload', () => ({ ranges: $('.range-input', node).value }));
+  // Click a part square to download that part again.
+  $('.grid', node).addEventListener('click', async (e) => {
+    const cell = e.target.closest('.cell');
+    const part = Number(cell?.dataset.part);
+    if (!part) return;
+    if (!confirm(T('restartConfirm', { n: part, name: cell.dataset.name }))) return;
+    await send('restartPart', { jobId, part });
+    refresh();
+  });
   $('.act-remove', node).addEventListener('click', async () => {
     if (!confirm(T('removeConfirm'))) return;
     await send('removeJob', { jobId });
@@ -169,12 +186,16 @@ function renderJob(job) {
   parts.forEach((p, i) => {
     const c = grid.children[i];
     c.className = `cell ${p.status}`;
+    const name = partName(job, p);
+    c.dataset.part = String(p.part);
+    c.dataset.name = name;
+    c.setAttribute('aria-label', `${name} · ${T(`status_${p.status}`)}`);
     const total = p.totalBytesLive || p.sizeBytes;
     if (p.status === 'downloading') c.style.setProperty('--p', total ? Math.min(1, p.bytes / total).toFixed(3) : '.1');
     c.title =
-      `${T('partTitle', { n: p.part })} · ${T(`status_${p.status}`)}` +
+      `${name}\n${T('partTitle', { n: p.part })} · ${T(`status_${p.status}`)}` +
       (p.error ? ` · ${tm(lang, p.error)}` : '') +
-      (p.filename ? `\n${p.filename}` : '');
+      `\n${T('restartHint')}`;
   });
 
   const main = $('.act-main', node);
